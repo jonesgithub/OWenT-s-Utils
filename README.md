@@ -1,11 +1,29 @@
-# OWenT’s Utils
-**个人代码记录册**
+Gnome 配置记录
+======
 
-+ **C&CPP** - C或C++代码
-+ **Script** - 脚本工具(Bash&Shell、Lua、Python等工具脚本)
-+ **Web** - 由于有些工具是PHP和Javascript一起的，而且我也不是主要搞这个，就不分得那么细了
-+ **Dot Net** - 好像我只会一点点C#
-+ **Java** - 对Java好感度有所上升
-+ **Other** - 杂项
+主题: gnome-look.org, art.gnome.org
+------
+1. Numix, numixproject.org
+    - 1.1 sudo add-apt-repository ppa:numix/ppa
+    - 1.2 sudo fedy -e numix_themes
+2. Moka, mokaproject.com
 
-有任何意见或建议请 [mailto:owt5008137@live.com](mailto:owt5008137@live.com) 或 [mailto:admin@owent.net](mailto:admin@owent.net)
+
+插件:
+------
+1. Dash to dock
+2. User themes
+3. Applications menu
+
+
+软件包:
+------
+1. gnome-shell-theme-*
+2. gnome-shell-search-*
+3. gnome-shell-extension-*
+
+
+安装目录:
+------
+1. /usr/share/gnome-shell
+2. ~/.themes
