@@ -1,11 +1,15 @@
-# OWenT’s Utils
-**个人代码记录册**
+OWenT’s Utils -- C&CPP
+=============
 
-+ **C&CPP** - C或C++代码
-+ **Script** - 脚本工具(Bash&Shell、Lua、Python等工具脚本)
-+ **Web** - 由于有些工具是PHP和Javascript一起的，而且我也不是主要搞这个，就不分得那么细了
-+ **Dot Net** - 好像我只会一点点C#
-+ **Java** - 对Java好感度有所上升
-+ **Other** - 杂项
+### 文件夹说明
+**include**  -- 头文件
 
-有任何意见或建议请 [mailto:owt5008137@live.com](mailto:owt5008137@live.com) 或 [mailto:admin@owent.net](mailto:admin@owent.net)
+**src**      -- 生成库的代码文件
+
+**sample**   -- 部分模块的代码使用示例
+
+**test**     -- 部分模块的单元测试（包含了gtest源码）
+
+##### CMakeLists.txt 仅针对GCC编写(特别是编译选项部分), VC的话包含include文件夹，添加src下的所有文件即可 (* ^ _ ^ *)
+###### 注: MSYS下，生成gtest不正常，所以单元测试无法生成，Cygwin下正常
+
