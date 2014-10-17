@@ -250,10 +250,11 @@ for PHP_OPT_COMP_NAME in $PHP_OPT_COMP_INSTALL; do
     elif [ "$PHP_OPT_COMP_NAME" == "apcu" ]; then
         # install_pecl_apcu;
 	# 这货会导致php-fpm崩溃，网上说不如用zendopcache 
+	echo "apcu disabled in php-fpm 5.4";
     fi
 done
 
-if [ ! -z "DB_DATA_DIR" && -e "/etc/my.cnf" ]; then
+if [ ! -z "DB_DATA_DIR" ] && [ -e "/etc/my.cnf" ]; then
     mkdir -p "$DB_DATA_DIR/mariadb/datadir";
     chown mysql:users "$DB_DATA_DIR" -R "$DB_DATA_DIR";
     sed -i "s#datadir=.*#datadir=$DB_DATA_DIR/mariadb/datadir#g" /etc/my.cnf;
