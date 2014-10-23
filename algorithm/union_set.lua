@@ -1,4 +1,9 @@
--- ���鼯�㷨 - begin
+--region union_set.lua
+--Author : 文韬
+--Date   : 2014/10/22
+--此文件由[BabeLua]插件自动生成
+
+-- 并查集算法 - begin
 function union_find(union_set, id)
     union_set[id] = union_set[id] or id
     if union_set[id] == id then
@@ -25,5 +30,7 @@ function union_merge(union_set, left, right)
         union_set[root_left] = root_right
     end
 end
--- ���鼯�㷨 - end
+-- 并查集算法 - end
 
+
+--endregion
