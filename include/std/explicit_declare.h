@@ -73,4 +73,28 @@
         #define CLASS_FINAL
 #endif
 
+
+// deprecated
+// using: DEPRECATED_ATTR int a; class DEPRECATED_ATTR a;
+// using: DEPRECATED_MSG("there is better choose") int a; class DEPRECATED_MSG("there is better choose") a;
+#if defined(__cplusplus) && __cplusplus >= 201402L
+#define DEPRECATED_ATTR [[deprecated]]
+#elif defined(__GNUC__) && ((__GNUC__ >= 4) || ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 1)))
+#define DEPRECATED_ATTR __attribute__((deprecated))
+#elif _MSC_VER >= 1400 //vs 2005 or higher
+#define DEPRECATED_ATTR __declspec(deprecated) 
+#else
+#define DEPRECATED_ATTR
+#endif 
+
+#if defined(__cplusplus) && __cplusplus >= 201402L
+#define DEPRECATED_MSG(msg) [[deprecated(msg)]]
+#elif defined(__GNUC__) && ((__GNUC__ >= 4) || ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 1)))
+#define DEPRECATED_MSG(msg) __attribute__((deprecated(msg)))
+#elif _MSC_VER >= 1400 //vs 2005 or higher
+#define DEPRECATED_MSG(msg) __declspec(deprecated(msg)) 
+#else
+#define DEPRECATED_MSG(msg)
+#endif 
+
 #endif
