@@ -4,8 +4,8 @@
 --启动载入项
 
 return { 
-    conf,
-    utils = {
+    'conf',
+    ['utils'] = {
         'adaptor',
         'vardump',
     },

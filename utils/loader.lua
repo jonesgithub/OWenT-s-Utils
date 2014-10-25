@@ -41,7 +41,7 @@ function loader.load_table(table_obj, prefix, root)
         -- 普通文件: table list
         elseif 'number' == type(k) and 'string' == type(v) then
             loader.load(prefix .. v)
-
+            
         -- 普通文件: key-value配置
         else
             root[k] = loader.load(prefix .. k)

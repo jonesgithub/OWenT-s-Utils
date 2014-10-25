@@ -3,8 +3,6 @@
 --Date   : 2014/10/22
 --此文件由[BabeLua]插件自动生成
 
-require('utils.loader')
-
 -- 额外拓展 -- vardump
 _G.vardump = function (var, conf)
     local rm = {}
