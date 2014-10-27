@@ -71,7 +71,7 @@ CentOS 6.2 & CentOS 6.5 & Fedora 20 & Ubuntu 14.04 LTS
 #### 编译目标：
 + gcc 4.9.X
 + binutils 2.24
-+ python 2.7.6 *[按需]*
++ python 2.7.8 *[按需]*
 + gdb 7.7.1 (如果存在ncurses-devel包)
 
 #### 注：
