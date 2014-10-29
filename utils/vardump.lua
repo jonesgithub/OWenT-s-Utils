@@ -7,12 +7,13 @@
 _G.vardump = function (var, conf)
     local rm = {}
     local cfg = {
-        show_metatable = false,
-        show_table_once = false,
-        ident = "    ",
-        symbol_name = "symbol",
-        recursive = nil, -- 递归打印的层数（nil表示不限制打印层数 -_-||）  
-        ostream = io.stdout
+        show_all = false,               -- 显示隐藏对象（以__开头）
+        show_metatable = false,         -- 展开metatable
+        show_table_once = false,        -- 每个名称的table只显示一次
+        ident = "    ",                 -- 缩进符号
+        symbol_name = "__classname",    -- 符号名称保存位置
+        recursive = nil,                -- 递归打印的层数（nil表示不限制打印层数 -_-||）  
+        ostream = io.stdout             -- 输出目标
     }
     
     if "table" == type(conf) then
@@ -31,7 +32,7 @@ _G.vardump = function (var, conf)
         
         if nil == t then
             cfg.ostream:write("nil")
-        elseif "table" == t and (nil == recursive or recursive >= 0) then
+        elseif ("table" == t or 'userdata' == t ) and (nil == recursive or recursive >= 0) then
             local name = tostring(obj)
             cfg.ostream:write(name)
             if nil == rawget(rm, name) then
@@ -40,7 +41,7 @@ _G.vardump = function (var, conf)
                 
                 cfg.ostream:write(" {\n")
                 -- metatable
-                do
+                if cfg.show_all or cfg.show_metatable then
                     local meta = getmetatable(obj)
                     cfg.ostream:write(ident .. ident_symbol .. "__metatable : ")
                     if cfg.show_metatable then
@@ -55,11 +56,13 @@ _G.vardump = function (var, conf)
                 end
                 
                 for k, v in pairs(obj) do
-                    cfg.ostream:write(ident .. ident_symbol)
-                    pvar(k, ident .. ident_symbol, name, recursive)
-                    cfg.ostream:write(" : ")
-                    pvar(v, ident .. ident_symbol, name, recursive)
-                    cfg.ostream:write("\n")
+                    if cfg.show_all or '__' ~= string.sub(k, 1, 2) then
+                        cfg.ostream:write(ident .. ident_symbol)
+                        pvar(k, ident .. ident_symbol, name, recursive)
+                        cfg.ostream:write(" : ")
+                        pvar(v, ident .. ident_symbol, name, recursive)
+                        cfg.ostream:write("\n")
+                    end
                 end
                 cfg.ostream:write(ident .. "}")
                 
@@ -94,6 +97,11 @@ _G.vardbg_assert = function (var, check, conf, callback)
     end
 end
 
+--  额外拓展 -- stackdump -- 用于c api的lua_pcall传入的hmsg,追加堆栈信息
+_G.stackdump = function(msg)
+    return debug.traceback(msg, 2)
+end
 
-return _G.vardump
+return _G.vardump, _G.vardbg_assert, _G.stackdump
+
 --endregion

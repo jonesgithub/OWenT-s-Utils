@@ -4,11 +4,15 @@
 --启动载入项
 
 return { 
-    'conf',
     ['utils'] = {
         'adaptor',
         'vardump',
     },
+    ['data'] = {
+        'conf_manager',
+        'conf_list'
+    },
+    ['logic'] = 'bootstrap'
 }
 
 --endregion

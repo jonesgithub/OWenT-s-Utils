@@ -9,11 +9,20 @@ for k, v in pairs(_G) do
     end
 end
 
+-- 移除模块
+function loader.remove(modname)
+    local ret = package.loaded[modname]
+    package.loaded[modname] = nil
+    return ret
+end
+
 -- 安全加载模块, 不允许加载userdata
 function loader.load(modname)
     local ret = require(modname)
     if 'userdata' == type(ret) then
         package.loaded[modname] = nil
+        ret = nil
+        print(debug.traceback())
     end
 
     return ret
