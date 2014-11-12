@@ -1,7 +1,7 @@
 #!/bin/bash
  
 # ======================================= 配置 ======================================= 
-PREFIX_DIR=/usr/local/gcc-4.9.1
+PREFIX_DIR=/usr/local/gcc-4.9.2
 BUILD_TARGET_COMPOMENTS="";
 
 # ======================= 非交叉编译 ======================= 
@@ -230,7 +230,7 @@ fi
   
 # install isl
 if [ -z "$BUILD_TARGET_COMPOMENTS" ] || [ "0" == $(is_in_list isl $BUILD_TARGET_COMPOMENTS) ]; then
-    ISL_PKG=$(check_and_download "isl-0.11" "isl-*.tar.bz2" "ftp://gcc.gnu.org/pub/gcc/infrastructure/isl-0.11.1.tar.bz2" );
+    ISL_PKG=$(check_and_download "isl-0.11" "isl-*.tar.bz2" "ftp://gcc.gnu.org/pub/gcc/infrastructure/isl-0.12.2.tar.bz2" );
     if [ $? -ne 0 ]; then
         echo -e "$ISL_PKG";
         exit -1;
@@ -271,7 +271,7 @@ fi
 # ======================= install gcc ======================= 
 if [ -z "$BUILD_TARGET_COMPOMENTS" ] || [ "0" == $(is_in_list gcc $BUILD_TARGET_COMPOMENTS) ]; then
     # ======================= gcc包 ======================= 
-    GCC_PKG=$(check_and_download "gcc" "gcc-*.tar.bz2" "ftp://gcc.gnu.org/pub/gcc/releases/gcc-4.9.1/gcc-4.9.1.tar.bz2" );
+    GCC_PKG=$(check_and_download "gcc" "gcc-*.tar.bz2" "ftp://gcc.gnu.org/pub/gcc/releases/gcc-4.9.2/gcc-4.9.2.tar.bz2" );
     if [ $? -ne 0 ]; then
         echo -e "$GCC_PKG";
         exit -1;
@@ -345,13 +345,13 @@ if [ -z "$BUILD_TARGET_COMPOMENTS" ] || [ "0" == $(is_in_list gdb $BUILD_TARGET_
 	    fi
 	
 	    # ======================= 正式安装GDB =======================
-	    GDB_PKG=$(check_and_download "gdb" "gdb-*.tar.bz2" "http://ftp.gnu.org/gnu/gdb/gdb-7.7.1.tar.bz2" );
+	    GDB_PKG=$(check_and_download "gdb" "gdb-*.tar.xz" "http://ftp.gnu.org/gnu/gdb/gdb-7.8.1.tar.xz" );
 	    if [ $? -ne 0 ]; then
 		    echo -e "$GDB_PKG";
 		    exit -1;
 	    fi
-	    tar -jxvf $GDB_PKG;
-	    GDB_DIR=$(ls -d gdb-* | grep -v \.tar\.bz2);
+	    tar -axvf $GDB_PKG;
+	    GDB_DIR=$(ls -d gdb-* | grep -v \.tar\.xz);
 	    cd $GDB_DIR;
 	    ./configure --prefix=$PREFIX_DIR --with-gmp=$PREFIX_DIR --with-mpc=$PREFIX_DIR --with-mpfr=$PREFIX_DIR --with-isl=$PREFIX_DIR --with-cloog=$PREFIX_DIR --enable-build-with-cxx --enable-gold --enable-libada --enable-libssp --enable-objc-gc $GDB_PYTHON_OPT $BUILD_TARGET_CONF_OPTION;
 	    make $BUILD_THREAD_OPT && make install;
