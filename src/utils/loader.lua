@@ -1,13 +1,7 @@
 local class_builder = require('utils.class')
 
 local loader = class_builder.register('utils.loader', class_builder.singleton)
-loader.sysmod = {}
-
-for k, v in pairs(_G) do
-    if nil ~= v then
-        loader.sysmod[k] = true
-    end
-end
+loader.loaded_mods = {}
 
 -- 移除模块
 function loader.remove(modname)
@@ -22,7 +16,13 @@ function loader.load(modname)
     if 'userdata' == type(ret) then
         package.loaded[modname] = nil
         ret = nil
-        print(debug.traceback())
+        log_error('try to load userdata using utils.loader.load(%s)', tostring(modname))
+    else
+--        if not loader.loaded_mods[modname] then
+--            log_debug('load new module %s', modname)
+--        end
+
+        loader.loaded_mods[modname] = true
     end
 
     return ret
@@ -38,9 +38,7 @@ function loader.load_table(table_obj, prefix, root)
         if 'table' == type(v) then
             if nil == root[k] then
                 root[k] = {}
-                class_builder.register(prefix .. k, class_builder.namespace)
             end
-            
             loader.load_table(v, prefix .. k .. '.', root[k])
 
         -- 列表文件
@@ -65,7 +63,7 @@ function loader.load_list(modname, prefix, root)
 
     local ret = loader.load(prefix .. modname)
     if 'userdata' == type(ret) then
-        error('[ERROR] load list file "' .. prefix .. modname .. '" failed')
+        log_error('load list file "' .. prefix .. modname .. '" failed')
         return false
     end
 
@@ -75,25 +73,30 @@ end
 
 -- 清空所有非预置模块
 function loader.clear()
-    for k, v in pairs(_G) do
-        if nil ~= v and loader.sysmod[k] then
-            _G[k] = nil
-        end
+    for k, v in pairs(loader.loaded_mods) do
+        package.loaded[k] = nil
+        -- log_debug('remove package %s', k)
     end
-    -- 防止utils被先加载，导致utils不更新的问题
-    if nil ~= _G['utils'] then
-        _G['utils'] = nil
-    end
+    package.loaded['utils.adaptor'] = nil
+    package.loaded['utils.vardump'] = nil
+    package.loaded['utils.conf'] = nil
+    package.loaded['utils.class'] = nil
+    package.loaded['utils.loader'] = nil
+    package.loaded['utils.event'] = nil
+    
+    -- vardump(package.loaded, {ostream = log_stream, recursive = 1})
 
     -- 清空后要保证loader首先被加载，并初始化utils包
-    require('utils.loader')
+    class_builder = require('utils.class')
+    loader = require('utils.loader')
+    require('utils.event')
 end
 
-function loader.reload()
-    for k, v in pairs(_G) do
-        if nil ~= v and loader.sysmod[k] then
-            _G[k] = nil
-        end
+function loader.reload(...)
+    loader.clear()
+    local args = {...}
+    for k, v in ipairs(args) do
+        loader.load_list(v)
     end
 end
 

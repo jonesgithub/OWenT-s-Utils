@@ -1,4 +1,4 @@
---region conf.lua
+--region geometricconf.lua
 --Author : OWenT
 --Date   : 2014/10/22
 --全局配置
@@ -13,7 +13,11 @@ return {
         ALL     = 5,
     },
     log = 5,
-    debug_mode = true
+    debug_mode = true,
+    
+    app_setting = {
+        show_unit_hp = true
+    }
 }
 
 --endregion

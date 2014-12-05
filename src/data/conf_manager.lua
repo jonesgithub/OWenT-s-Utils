@@ -7,12 +7,53 @@ local class = require('utils.class')
 local loader = require('utils.loader')
 
 local conf_set = class.register('data.conf_data_set')
-function conf_set:get(key)
-    if nil == self then
+
+function conf_set:get_by_table(key)
+    if not self or not key then
+        return nil
+    end
+    local len = #key
+    local i = 1
+    local ret = self.__data
+    
+    while ret and i <= len do
+        ret = ret[key[i]]
+        i = i + 1
+    end
+    
+    return ret
+end
+
+function conf_set:get(...)   
+    return self:get_by_table({...})
+end
+
+function conf_set:get_all()
+    return self.__data
+end
+
+function conf_set:set_by_table(args)
+    if not self or not args or #args < 2 then
         return nil
     end
 
-    return self[key] or nil
+    local i = 1
+    local ret = self.__data
+    local len = #args - 2
+    while i <= len do
+        if not ret[args[i]] then
+            ret[args[i]] = {}
+        end
+        ret = ret[args[i]]
+        i = i + 1
+    end
+    
+    ret[args[len + 1]] = args[len + 2]
+    return args[len + 2]
+end
+
+function conf_set:set(...)
+    return self:set_by_table({...})
 end
 
 
@@ -21,9 +62,10 @@ local conf_manager = class.register('data.conf_manager', class.singleton)
 conf_manager.__data = {}
 
 function conf_manager:load(path, kv_fn)
-    local tb = loader.load('data.' .. path)
+    path = string.format('data.%s', tostring(path))
+    local tb = loader.load(path)
     if nil == tb then
-        LogError('load cfg [%s] failed', path)
+        log_error('load cfg [%s] failed', path)
         return false
     end
 
@@ -33,27 +75,34 @@ function conf_manager:load(path, kv_fn)
 
     for k,v in pairs(tb) do
         if 'number' == type(k) then
-            LogInfo('load cfg [%s] success, ver=%s, count=%d', path, v.data_ver, v.count)
+            log_info('load cfg [%s] success, ver=%s, count=%d', path, v.data_ver, v.count)
         else
-            conf_manager.__data[k] = conf_manager.__data[k] or conf_set.new()
+            conf_manager.__data[k] = conf_manager.__data[k] or conf_set.new({__data = {}})
             local cfg = conf_manager.__data[k]
             for ck, cv in ipairs(v) do
-                local rk = kv_fn(ck, cv)
-                if cfg:get(rk) then
-                    LogWarn('config [%s] already has key %s, old record will be covered', path, rk)
+                local rv = class.set_readonly(cv)
+                local rk = { kv_fn(ck, rv) }
+                if cfg:get_by_table(rk) then
+                    log_warn('config [%s] already has key %s, old record will be covered', path, table.concat(rk, ', '))
                 end
 
-                cfg[rk] = cv
+                table.insert(rk, rv)
+                cfg:set_by_table(rk)
             end
         end
     end
 
     -- ÊÍ·Å×ÊÔ´
-    loader.remove('data.' .. path)
+    loader.remove(path)
 end
 
 
+function conf_manager:get(type_name)
+    return self.__data[type_name] or nil
+end
+
 function conf_manager:reload()
+    self.__data = {}
     loader.remove('data.conf_list')
     loader.load('data.conf_list')
 end

@@ -4,8 +4,6 @@
 --启动载入项
 
 return { 
-    ['scene'] = 'bootstrap',
-    ['unit'] = 'bootstrap',
 }
 
 --endregion

@@ -3,18 +3,20 @@
 --Date   : 2014/10/22
 --此文件由[BabeLua]插件自动生成
 
+_G.vardump_default = {
+    show_all = false,               -- 显示隐藏对象（以__开头）
+    show_metatable = false,         -- 展开metatable
+    show_table_once = false,        -- 每个名称的table只显示一次
+    ident = "    ",                 -- 缩进符号
+    symbol_name = "__classname",    -- 符号名称保存位置
+    recursive = nil,                -- 递归打印的层数（nil表示不限制打印层数 -_-||）  
+    ostream = io.stdout             -- 输出目标
+}
+
 -- 额外拓展 -- vardump
 _G.vardump = function (var, conf)
     local rm = {}
-    local cfg = {
-        show_all = false,               -- 显示隐藏对象（以__开头）
-        show_metatable = false,         -- 展开metatable
-        show_table_once = false,        -- 每个名称的table只显示一次
-        ident = "    ",                 -- 缩进符号
-        symbol_name = "__classname",    -- 符号名称保存位置
-        recursive = nil,                -- 递归打印的层数（nil表示不限制打印层数 -_-||）  
-        ostream = io.stdout             -- 输出目标
-    }
+    local cfg = table.extend(_G.vardump_default)
     
     if "table" == type(conf) then
         for k, v in pairs(conf) do
@@ -32,7 +34,7 @@ _G.vardump = function (var, conf)
         
         if nil == t then
             cfg.ostream:write("nil")
-        elseif ("table" == t or 'userdata' == t ) and (nil == recursive or recursive >= 0) then
+        elseif "table" == t and (nil == recursive or recursive >= 0) then
             local name = tostring(obj)
             cfg.ostream:write(name)
             if nil == rawget(rm, name) then
