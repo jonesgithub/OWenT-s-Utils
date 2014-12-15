@@ -1,16 +1,18 @@
 cmake_minimum_required(VERSION 2.8.9)
 
 project(OWenTsUtilsCPP)
+set (PROJECT_CMAKE_MODULE_DIR "${CMAKE_SOURCE_DIR}/project/cmake")
 
 # 编译选项 
 #####################################################################
-option(BUILD_SHARED_LIBS "Build shared libraries (DLLs)." OFF)
-if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Release")
-endif()
+include("${PROJECT_CMAKE_MODULE_DIR}/ProjectBuildOption.cmake")
 
-include(${PROJECT_SOURCE_DIR}/project/cmake/CompilerOption.cmake)
-include(${PROJECT_SOURCE_DIR}/project/cmake/TargetOption.cmake)
+include("${PROJECT_CMAKE_MODULE_DIR}/CompilerOption.cmake")
+include("${PROJECT_CMAKE_MODULE_DIR}/TargetOption.cmake")
+
+if (${ENABLE_MIXEDINT_MAGIC_MASK} GREATER 0)
+    add_compiler_define("ENABLE_MIXEDINT_MAGIC_MASK=${ENABLE_MIXEDINT_MAGIC_MASK}")
+endif()
 
 # 设置输出目录 
 set(PROJECT_ALL_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/include")
