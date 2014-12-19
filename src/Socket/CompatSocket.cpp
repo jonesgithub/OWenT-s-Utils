@@ -168,11 +168,18 @@ namespace util
             #endif
             
             if (iRet < 0) {
-                int en = GetError();
-                if (EBADF == en || ENOTSOCK == en) {
+                int err = GetError();
+                // 另一种方案是(效果如何有待考证)
+                // #ifdef WIN32
+                // if (WSAEWOULDBLOCK != err)
+                // #else
+                // if (EINPROGRESS != err && EAGAIN != err)
+                // #endif
+                
+                if (EBADF == err || ENOTSOCK == err) {
                     m_uSock = INVALID_SOCKET;
                 } else {
-                    switch (en) {
+                    switch (err) {
                     case ENOTCONN:
                     case ECONNRESET:
                         Close();
@@ -202,11 +209,18 @@ namespace util
             if (0 == iRet) {
                 Close();
             } else if (iRet < 0) {
-                int en = GetError();
-                if (EBADF == en || ENOTSOCK == en) {
+                int err = GetError();
+                // 另一种方案是(效果如何有待考证)
+                // #ifdef WIN32
+                // if (WSAEWOULDBLOCK != err)
+                // #else
+                // if (EINPROGRESS != err && EAGAIN != err)
+                // #endif
+
+                if (EBADF == err || ENOTSOCK == err) {
                     m_uSock = INVALID_SOCKET;
                 } else {
-                    switch (en) {
+                    switch (err) {
                     case ECONNREFUSED:
                     case ENOTCONN:
                         Close();
