@@ -16,8 +16,12 @@
 #ifndef _UTIL_SOCKET_COMPAT_SOCKET_H__
 #define _UTIL_SOCKET_COMPAT_SOCKET_H__
 
+#include <string>
+#include <list>
+
 #ifdef WIN32
-    #include <winsock.h>
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
     typedef int                socklen_t;
 #else
     #include <sys/socket.h>
@@ -44,8 +48,20 @@ namespace util
     namespace socket
     {
 
+        struct DnsInfo {
+            enum struct ADDR_TYPE {
+                IPV4 = AF_INET,
+                IPV6 = AF_INET6,
+            };
+
+            ADDR_TYPE type;
+            std::string address;
+        };
+
         class CompatSocket 
         {
+        public:
+            typedef std::list<DnsInfo> dns_result_t;
 
         public:
             CompatSocket(SOCKET sock = INVALID_SOCKET);
@@ -58,24 +74,27 @@ namespace util
             bool Create(int af = PF_INET, int type = SOCK_STREAM, int protocol = 0);
 
             // Connect socket
-            bool Connect(const char* ip, unsigned short port);
+            bool Connect(const char* ip, uint16_t port, DnsInfo::ADDR_TYPE type = DnsInfo::ADDR_TYPE::IPV4);
             // #region server
             // Bind socket
-            bool Bind(unsigned short port);
+            bool Bind(uint16_t port);
 
             // Listen socket
             bool Listen(int backlog = 5); 
 
             // Accept socket
-            bool Accept(CompatSocket& s, char* fromip = NULL);
+            bool Accept(CompatSocket& s, DnsInfo* from);
             // #endregion
             
             // Send socket
-            int Send(const char* buf, int len, int iMicroSeconds = 0);
+            int Send(const char* buf, int len);
 
             // Recv socket
-            int Recv(char* buf, int len, int iMicroSeconds = 0);
+            int Recv(char* buf, int len);
             
+            // Select
+            int Select(bool read, bool write, int iSecond = 0, int iMicroSeconds = 0);
+
             // Close socket
             int Close();
 
@@ -90,15 +109,29 @@ namespace util
             //#pragma endregion
 
             // Domain parse
-            static bool DnsParse(const char* domain, char* ip);
+            static bool DnsParse(const char* domain, std::list<DnsInfo>& dns_res);
 
             CompatSocket& operator = (SOCKET s);
 
             operator SOCKET ();
 
+            bool IsValid() const;
+
+            void SetNoBlock(bool no_block = false);
+
+            void SetNoDelay(bool no_delay = false);
+
+            void SetKeepAlive(bool keep_alive = false);
+
+            int SetTimeout(int recvtimeout, int sendtimeout, int lingertimeout);
         protected:
             SOCKET m_uSock;
 
+        private:
+            template<typename TSrc, typename TD>
+            void _assign(TSrc& s, const TD& td) {
+                s = static_cast<TSrc>(td);
+            }
         };
 
     }

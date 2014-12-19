@@ -1,7 +1,8 @@
 // Licensed under the MIT licenses.
 #include <cstdio>
+#include <stdint.h>
 #include <iostream>
-#include "Socket/CompatSocket.h"
+#include "CompatSocket.h"
 
 #if defined(_MSC_VER) && defined(WIN32)
     #pragma comment(lib, "wsock32")
@@ -92,17 +93,14 @@ namespace util
         bool CompatSocket::Create(int af, int type, int protocol)
         {
             m_uSock = ::socket(af, type, protocol);
-            if ( m_uSock == INVALID_SOCKET ) {
-                return false;
-            }
-            return true;
+            return INVALID_SOCKET != m_uSock;
         }
 
-        bool CompatSocket::Connect(const char* ip, unsigned short port)
+        bool CompatSocket::Connect(const char* ip, uint16_t port, DnsInfo::ADDR_TYPE type)
         {
             struct sockaddr_in svraddr;
-            svraddr.sin_family = AF_INET;
-            svraddr.sin_addr.s_addr = inet_addr(ip);
+            _assign(svraddr.sin_family, type);
+            inet_pton((int)type, ip, &svraddr.sin_addr);
             svraddr.sin_port = htons(port);
             int ret = connect(m_uSock, (struct sockaddr*)&svraddr, sizeof(svraddr));
             if ( ret == SOCKET_ERROR ) {
@@ -111,7 +109,7 @@ namespace util
             return true;
         }
 
-        bool CompatSocket::Bind(unsigned short port)
+        bool CompatSocket::Bind(uint16_t port)
         {
             struct sockaddr_in svraddr;
             svraddr.sin_family = AF_INET;
@@ -138,7 +136,7 @@ namespace util
             return true;
         }
 
-        bool CompatSocket::Accept(CompatSocket& s, char* fromip)
+        bool CompatSocket::Accept(CompatSocket& s, DnsInfo* from)
         {
             struct sockaddr_in cliaddr;
             socklen_t addrlen = sizeof(cliaddr);
@@ -148,80 +146,116 @@ namespace util
             }
 
             s = sock;
-            if ( fromip != NULL )
-                sprintf(fromip, "%s", inet_ntoa(cliaddr.sin_addr));
+            if (from != NULL) {
+                char ip_buf[64] = { 0 };
+                inet_ntop(cliaddr.sin_family, &cliaddr.sin_addr, ip_buf, sizeof(ip_buf));
+                from->address = ip_buf;
+                _assign(from->type, cliaddr.sin_family);
+            }
 
             return true;
         }
 
-        int CompatSocket::Send(const char* buf, int len, int iMicroSeconds)
+        int CompatSocket::Send(const char* buf, int len)
         {
             //非阻塞send 
-            fd_set wset;
-            FD_ZERO(&wset);
-            FD_SET(m_uSock, &wset); 
-            struct timeval tm;
-            tm.tv_sec = 0;
-            tm.tv_usec = iMicroSeconds;
-
-            int iRet = select(m_uSock + 1, NULL, &wset, NULL, &tm);
-            if (iRet == 0)
-            {
-                // Time out
-                return -1;
-            }
-
-            if (!FD_ISSET(m_uSock, &wset))
-            {
-                return -2;
-            }
+            int iRet = 0;
 
             #ifdef WIN32
-                iRet = send(m_uSock, buf, len, 0);
+            iRet = send(m_uSock, buf, len, 0);
             #else
-                iRet = send(m_uSock, buf, static_cast<size_t>(len), 0);
+            iRet = send(m_uSock, buf, static_cast<size_t>(len), 0);
             #endif
-                
-            if (iRet < 0)
-            {
-                return iRet;
+            
+            if (iRet < 0) {
+                int en = GetError();
+                if (EBADF == en || ENOTSOCK == en) {
+                    m_uSock = INVALID_SOCKET;
+                } else {
+                    switch (en) {
+                    case ENOTCONN:
+                    case ECONNRESET:
+                        Close();
+                        break;
+
+                    default:
+                        break;
+                    };
+                }
             }
 
             return iRet;
         }
 
-        int CompatSocket::Recv(char* buf, int len, int iMicroSeconds)
+        int CompatSocket::Recv(char* buf, int len)
         {
-            //非阻塞recv 
+            //非阻塞 recv 
+            int iRet = 0;
+            #ifdef WIN32
+            iRet = recv(m_uSock, buf, len, 0);
+            #else
+            iRet = recv(m_uSock, buf, static_cast<size_t>(len), 0);
+            #endif
+
+            // http://linux.die.net/man/2/recv
+            // recv 返回0，则是socket对端断开
+            if (0 == iRet) {
+                Close();
+            } else if (iRet < 0) {
+                int en = GetError();
+                if (EBADF == en || ENOTSOCK == en) {
+                    m_uSock = INVALID_SOCKET;
+                } else {
+                    switch (en) {
+                    case ECONNREFUSED:
+                    case ENOTCONN:
+                        Close();
+                        break;
+
+                    default:
+                        break;
+                    };
+                }
+            }
+
+            return iRet;
+        }
+
+        int CompatSocket::Select(bool read, bool write, int iSecond, int iMicroSeconds)
+        {
+            // Select操作
+            fd_set wset;
+            if (write) {
+                FD_ZERO(&wset);
+                FD_SET(m_uSock, &wset);
+            }
+
             fd_set rset;
-            FD_ZERO(&rset);
-            FD_SET(m_uSock, &rset); 
+            if (read) {
+                FD_ZERO(&rset);
+                FD_SET(m_uSock, &rset);
+            }
+
             struct timeval tm;
-            tm.tv_sec = 0;
+            tm.tv_sec = iSecond;
             tm.tv_usec = iMicroSeconds;
 
-
-            int iRet = select(m_uSock + 1, &rset, NULL, NULL, &tm);
+            int iRet = select(m_uSock + 1, read ? &rset : NULL, write? &wset: NULL, NULL, &tm);
             if (iRet == 0)
             {
                 // Time out
                 return -1;
             }
 
-            if (!FD_ISSET(m_uSock, &rset))
+            iRet = -2;
+            if (read && FD_ISSET(m_uSock, &rset))
             {
-                return -2;
+                iRet = 0;
             }
 
-            #ifdef WIN32
-                iRet = recv(m_uSock, buf, len, 0);
-            #else
-                iRet = recv(m_uSock, buf, static_cast<size_t>(len), 0);
-            #endif
-                
-            if (iRet < 0)
+            if (write && FD_ISSET(m_uSock, &wset))
             {
-                return iRet;
+                iRet = 0;
             }
 
             return iRet;
@@ -248,19 +282,132 @@ namespace util
         #endif
         }
 
-        bool CompatSocket::DnsParse(const char* domain, char* ip)
+
+        bool CompatSocket::IsValid() const {
+            return INVALID_SOCKET != m_uSock;
+        }
+
+        void CompatSocket::SetNoBlock(bool no_block) {
+            if (no_block) {
+                int val = 0;
+                SetOption(SO_RCVTIMEO, &val, sizeof(val));
+                SetOption(SO_SNDTIMEO, &val, sizeof(val));
+            }
+
+#ifdef WIN32
+            u_long mode = no_block? 1: 0;
+            ioctlsocket(m_uSock, FIONBIO, &mode);
+#else
+            int flags = fcntl(sockfd, F_GETFL, 0);
+            if (no_block) {
+                flags = flags | O_NONBLOCK;
+            } else {
+                flags = flags & (~O_NONBLOCK);
+            }
+            fnctl(m_uSock, F_SETFL, flags);
+#endif
+        }
+
+        void CompatSocket::SetNoDelay(bool no_delay) {
+            int val = no_delay ? 1 : 0;
+            SetOption(TCP_NODELAY, &val, sizeof(val));
+        }
+
+        void CompatSocket::SetKeepAlive(bool keep_alive) {
+            int val = keep_alive? 1: 0;
+            SetOption(SO_KEEPALIVE, &val, sizeof(val));
+        }
+
+        int CompatSocket::SetTimeout(int recvtimeout, int sendtimeout, int lingertimeout) {
+            int rt = -1;
+            if (IsValid())
+            {
+                rt = 0;
+#if defined(WIN32)  
+                if (lingertimeout > -1)
+                {
+                    struct linger  lin;
+                    lin.l_onoff = lingertimeout;
+                    lin.l_linger = lingertimeout;
+                    rt = setsockopt(m_uSock, SOL_SOCKET, SO_DONTLINGER, (const char*)&lin, sizeof(linger)) == 0 ? 0 : 0x1;
+                }
+                if (recvtimeout > 0 && rt == 0)
+                {
+                    rt = rt | (setsockopt(m_uSock, SOL_SOCKET, SO_RCVTIMEO, (char *)&recvtimeout, sizeof(int)) == 0 ? 0 : 0x2);
+                }
+                if (sendtimeout > 0 && rt == 0)
+                {
+                    rt = rt | (setsockopt(m_uSock, SOL_SOCKET, SO_SNDTIMEO, (char *)&sendtimeout, sizeof(int)) == 0 ? 0 : 0x4);
+                }
+#else
+                struct timeval timeout;
+                if (lingertimeout>-1)
+                {
+                    struct linger  lin;
+                    lin.l_onoff = lingertimeout>0 ? 1 : 0;
+                    lin.l_linger = lingertimeout / 1000;
+                    rt = setsockopt(m_uSock, SOL_SOCKET, SO_LINGER, (const char*)&lin, sizeof(linger)) == 0 ? 0 : 0x1;
+                }
+                if (recvtimeout > 0 && rt == 0)
+                {
+                    timeout.tv_sec = recvtimeout / 1000;
+                    timeout.tv_usec = (recvtimeout % 1000) * 1000;
+                    rt = rt | (setsockopt(m_uSock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == 0 ? 0 : 0x2);
+                }
+                if (sendtimeout > 0 && rt == 0)
+                {
+                    timeout.tv_sec = sendtimeout / 1000;
+                    timeout.tv_usec = (sendtimeout % 1000) * 1000;
+                    rt = rt | (setsockopt(m_uSock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) == 0 ? 0 : 0x4);
+                }
+#endif  
+            }
+
+            return rt;
+        }
+
+        bool CompatSocket::DnsParse(const char* domain, std::list<DnsInfo>& dns_res)
         {
-            struct hostent* p;
-            if ( (p = gethostbyname(domain)) == NULL )
+            struct addrinfo *result = NULL;
+            struct addrinfo *ptr = NULL;
+            struct addrinfo hints;
+
+            memset(&hints, 0, sizeof(hints));
+            hints.ai_family = AF_UNSPEC;
+            hints.ai_socktype = SOCK_STREAM;
+            hints.ai_protocol = IPPROTO_TCP;
+
+            int res = getaddrinfo(domain, 0, &hints, &result);
+            if (res != 0) {
                 return false;
-                
-            sprintf(ip, 
-                "%u.%u.%u.%u",
-                (unsigned char)p->h_addr_list[0][0], 
-                (unsigned char)p->h_addr_list[0][1], 
-                (unsigned char)p->h_addr_list[0][2], 
-                (unsigned char)p->h_addr_list[0][3]);
-            
+            }
+
+            for (ptr = result; ptr != NULL; ptr = ptr->ai_next) {
+                switch (ptr->ai_family) {
+                case AF_UNSPEC: {
+                    break;
+                }
+                case AF_INET:
+                case AF_INET6:{
+                    struct sockaddr_in * sockaddr_ip = (struct sockaddr_in *) ptr->ai_addr;
+                    dns_res.push_back(DnsInfo());
+                    DnsInfo& rec = dns_res.back();
+
+
+                    rec.type = (ptr->ai_family == AF_INET) ? DnsInfo::ADDR_TYPE::IPV4 : DnsInfo::ADDR_TYPE::IPV6;
+                    char addr_buff[64] = { 0 };
+                    inet_ntop(ptr->ai_family, &sockaddr_ip->sin_addr, addr_buff, sizeof(addr_buff));
+                    rec.address = addr_buff;
+                    break;
+                }
+                case AF_NETBIOS: {
+                    break;
+                }
+                default: {
+                    break;
+                }
+                }
+            }
             return true;
         }
     }
