@@ -25,6 +25,7 @@
     typedef int                socklen_t;
 #else
     #include <sys/socket.h>
+    #include <netinet/tcp.h>
     #include <netinet/in.h>
     #include <netdb.h>
     #include <fcntl.h>
@@ -50,6 +51,7 @@ namespace util
 
         struct DnsInfo {
             enum struct ADDR_TYPE {
+                UNIX = AF_UNIX,
                 IPV4 = AF_INET,
                 IPV6 = AF_INET6,
             };

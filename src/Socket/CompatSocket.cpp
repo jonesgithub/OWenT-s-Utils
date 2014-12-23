@@ -312,19 +312,23 @@ namespace util
             u_long mode = no_block? 1: 0;
             ioctlsocket(m_uSock, FIONBIO, &mode);
 #else
-            int flags = fcntl(sockfd, F_GETFL, 0);
+            int flags = fcntl(m_uSock, F_GETFL, 0);
             if (no_block) {
                 flags = flags | O_NONBLOCK;
             } else {
                 flags = flags & (~O_NONBLOCK);
             }
-            fnctl(m_uSock, F_SETFL, flags);
+            fcntl(m_uSock, F_SETFL, flags);
 #endif
         }
 
         void CompatSocket::SetNoDelay(bool no_delay) {
             int val = no_delay ? 1 : 0;
+#ifdef TCP_NODELAY
             SetOption(TCP_NODELAY, &val, sizeof(val));
+#else
+            // SetOption(TCP_NODELAY, &val, sizeof(val));
+#endif
         }
 
         void CompatSocket::SetKeepAlive(bool keep_alive) {
@@ -398,23 +402,38 @@ namespace util
 
             for (ptr = result; ptr != NULL; ptr = ptr->ai_next) {
                 switch (ptr->ai_family) {
-                case AF_UNSPEC: {
-                    break;
-                }
+                case AF_UNIX:
                 case AF_INET:
-                case AF_INET6:{
+                case AF_INET6:
+                {
                     struct sockaddr_in * sockaddr_ip = (struct sockaddr_in *) ptr->ai_addr;
                     dns_res.push_back(DnsInfo());
                     DnsInfo& rec = dns_res.back();
 
+                    switch (ptr->ai_family) {
+                    case AF_UNIX:
+                    {
+                        rec.type = DnsInfo::ADDR_TYPE::UNIX;
+                        break;
+                    }
 
-                    rec.type = (ptr->ai_family == AF_INET) ? DnsInfo::ADDR_TYPE::IPV4 : DnsInfo::ADDR_TYPE::IPV6;
+                    case AF_INET:
+                    {
+                        rec.type = DnsInfo::ADDR_TYPE::IPV4;
+                        break;
+                    }
+                    case AF_INET6:
+                    {
+                        rec.type = DnsInfo::ADDR_TYPE::IPV6;
+                        break;
+                    }
+                    default:
+                        break;
+                    }
+
                     char addr_buff[64] = { 0 };
                     inet_ntop(ptr->ai_family, &sockaddr_ip->sin_addr, addr_buff, sizeof(addr_buff));
                     rec.address = addr_buff;
-                    break;
-                }
-                case AF_NETBIOS: {
                     break;
                 }
                 default: {
