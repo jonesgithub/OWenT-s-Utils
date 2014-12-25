@@ -20,7 +20,7 @@
 
 // ============================================================
 // 公共包含部分
-// C++0x/11 显示申明
+// C++0x/11/14 显示申明
 // ============================================================
 
 #define PARAM_IN
@@ -81,7 +81,7 @@
 #define DEPRECATED_ATTR [[deprecated]]
 #elif defined(__GNUC__) && ((__GNUC__ >= 4) || ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 1)))
 #define DEPRECATED_ATTR __attribute__((deprecated))
-#elif _MSC_VER >= 1400 //vs 2005 or higher
+#elif defined(_MSC_VER) && _MSC_VER >= 1400 //vs 2005 or higher
 #define DEPRECATED_ATTR __declspec(deprecated) 
 #else
 #define DEPRECATED_ATTR
@@ -91,7 +91,7 @@
 #define DEPRECATED_MSG(msg) [[deprecated(msg)]]
 #elif defined(__GNUC__) && ((__GNUC__ >= 4) || ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 1)))
 #define DEPRECATED_MSG(msg) __attribute__((deprecated(msg)))
-#elif _MSC_VER >= 1400 //vs 2005 or higher
+#elif defined(_MSC_VER) && _MSC_VER >= 1400 //vs 2005 or higher
 #define DEPRECATED_MSG(msg) __declspec(deprecated(msg)) 
 #else
 #define DEPRECATED_MSG(msg)
