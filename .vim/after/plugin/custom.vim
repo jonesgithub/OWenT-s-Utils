@@ -1,41 +1,57 @@
-" µÚÒ»ĞĞÉèÖÃtab¼üÎª4¸ö¿Õ¸ñ£¬µÚ¶şĞĞÉèÖÃµ±ĞĞÖ®¼ä½»´íÊ±Ê¹ÓÃ4¸ö¿Õ¸ñ 
+" ç¬¬ä¸€è¡Œè®¾ç½®tabé”®ä¸º4ä¸ªç©ºæ ¼ï¼Œç¬¬äºŒè¡Œè®¾ç½®å½“è¡Œä¹‹é—´äº¤é”™æ—¶ä½¿ç”¨4ä¸ªç©ºæ ¼ 
 set tabstop=4
 set shiftwidth=4
 
-" ÓÃ¿Õ¸ñ¼üÌæ»»ÖÆ±í·û 
+" ç”¨ç©ºæ ¼é”®æ›¿æ¢åˆ¶è¡¨ç¬¦ 
 set expandtab
 
-" ÉèÖÃÆ¥ÅäÄ£Ê½£¬ÀàËÆµ±ÊäÈëÒ»¸ö×óÀ¨ºÅÊ±»áÆ¥ÅäÏàÓ¦µÄÄÇ¸öÓÒÀ¨ºÅ 
+" è®¾ç½®åŒ¹é…æ¨¡å¼ï¼Œç±»ä¼¼å½“è¾“å…¥ä¸€ä¸ªå·¦æ‹¬å·æ—¶ä¼šåŒ¹é…ç›¸åº”çš„é‚£ä¸ªå³æ‹¬å· 
 set showmatch
 
-" È¥³ıvimµÄGUI°æ±¾ÖĞµÄtoolbar 
-" set guioptions+=T
-" set guioptions+=m
-
-" ±³¾°¼°ÅäÉ«·½°¸ 
+" èƒŒæ™¯åŠé…è‰²æ–¹æ¡ˆ 
 if has('gui_running')
     set background=light
 else
     set background=dark
 endif
 
-" ÉèÖÃÅäÉ«£¬ÕâÀïÑ¡ÔñµÄÊÇdesert£¬Ò²ÓĞÆäËû·½°¸£¬ÔÚvimÖĞÊäÈë:color ÔÚÇÃtab¼ü¿ÉÒÔ²é¿´ 
+" è®¾ç½®é…è‰²ï¼Œè¿™é‡Œé€‰æ‹©çš„æ˜¯desertï¼Œä¹Ÿæœ‰å…¶ä»–æ–¹æ¡ˆï¼Œåœ¨vimä¸­è¾“å…¥:color åœ¨æ•²tabé”®å¯ä»¥æŸ¥çœ‹ 
 " color desert
 " colorscheme solarized
 
-"´«ËµÖĞµÄÈ¥µô±ß¿òÓÃÏÂ±ßÕâÒ»¾ä
+"ä¼ è¯´ä¸­çš„å»æ‰è¾¹æ¡†ç”¨ä¸‹è¾¹è¿™ä¸€å¥
 set go=
 
-" ÓĞÊ±ÖĞÎÄ»áÏÔÊ¾ÂÒÂë£¬ÓÃÒ»ÏÂ¼¸ÌõÃüÁî½â¾ö 
+" æœ‰æ—¶ä¸­æ–‡ä¼šæ˜¾ç¤ºä¹±ç ï¼Œç”¨ä¸€ä¸‹å‡ æ¡å‘½ä»¤è§£å†³ 
 let &termencoding=&encoding
 set fileencodings=utf-8,gb18030,gbk
 
-" ¸ßÁÁËÑË÷
+" é«˜äº®æœç´¢
 set hlsearch
 
-" GUI³¢ÊÔÊ¹ÓÃ×Ô¶¨Òå×ÖÌå
+" GUIç‰ˆæœ¬ä¸­çš„toolbar 
 if has('gui_running')
-    set guifont=DejaVu_Sans_Mono:h12:cDEFAULT,WenQuanYi_Micro_Hei:h12:cDEFAULT,Microsoft_Yahei:h12:cDEFAULT,Yahei_Mono:h12:cDEFAULT
-     set guifontwide=DejaVu_Sans_Mono:h12:cDEFAULT,WenQuanYi_Micro_Hei_Mono:h12:cDEFAULT,Yahei_Mono:h12:cDEFAULT,Microsoft_Yahei_UI:h12:cDEFAULT
+    set guioptions+=T
+    set guioptions+=m
+	map <silent> <F2> :if &guioptions =~# 'T' <Bar>
+        \set guioptions-=T <Bar>
+        \set guioptions-=m <Bar>
+    \else <Bar>
+        \set guioptions+=T <Bar>
+        \set guioptions+=m <Bar>
+    \endif<CR>
+	
+	source $VIMRUNTIME/delmenu.vim
+    source $VIMRUNTIME/menu.vim
 endif
 
+" GUIå°è¯•ä½¿ç”¨è‡ªå®šä¹‰å­—ä½“
+if has('gui_running')
+    set guifont=DejaVu_Sans_Mono:h12:cDEFAULT,WenQuanYi_Micro_Hei:h12:cDEFAULT,Microsoft_Yahei:h12:cDEFAULT,Yahei_Mono:h12:cDEFAULT,simhei:h12:cDEFAULT
+    set guifontwide=DejaVu_Sans_Mono:h12:cDEFAULT,WenQuanYi_Micro_Hei_Mono:h12:cDEFAULT,Yahei_Mono:h12:cDEFAULT,Microsoft_Yahei_UI:h12:cDEFAULT,simhei:h12:cDEFAULT
+endif
+
+" GUIè®¾ç½®çª—å£å¤§å°
+if has('gui_running')
+    set lines=48 columns=200
+endif
