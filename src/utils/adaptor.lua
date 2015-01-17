@@ -25,7 +25,6 @@ end
 -- 高级适配，输出重定向
 -- 同时兼容LuaLog和lua_log
 if nil == _G.LuaLog and nil == _G.lua_log then
-    _G.lua_log = _G.lua_log or _G.LuaLog
     _G.lua_log = function(fmt, ...)
         print(string.format(fmt, ...))
     end

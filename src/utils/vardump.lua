@@ -16,7 +16,15 @@ _G.vardump_default = {
 -- 额外拓展 -- vardump
 _G.vardump = function (var, conf)
     local rm = {}
-    local cfg = table.extend(_G.vardump_default)
+
+    local cfg = {};
+    if table.clone then
+        cfg = table.clone(_G.vardump_default)
+    else
+        for k, v in pairs(_G.vardump_default) do
+            cfg[k] = _G.vardump_default[k]
+        end
+    end
     
     if "table" == type(conf) then
         for k, v in pairs(conf) do

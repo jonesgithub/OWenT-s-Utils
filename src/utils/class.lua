@@ -15,6 +15,17 @@ local class = {
     __class_reg_table = {}
 }
 
+function class.set_id_allocator(...)
+    local args = { ... }
+    local argc = #args
+    local i = 1
+    while i <= argc do
+        id_allocator[i] = args[i]
+
+        i = i + 1
+    end
+end
+
 -- 创建新的实例ID
 function class.alloc_id()
     local len = #id_allocator

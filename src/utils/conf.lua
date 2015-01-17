@@ -16,7 +16,6 @@ return {
     debug_mode = true,
     
     app_setting = {
-        show_unit_hp = true
     }
 }
 

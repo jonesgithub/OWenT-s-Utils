@@ -13,30 +13,10 @@ extern "C" {
 #include "lauxlib.h"
 }
 
-// 加了多线程参数也不一定会用多线程，所以手动控制线程安全
-//#ifdef LUA_BINDING_ENABLE_ENGINE_MT
-//#undef LUA_BINDING_ENABLE_ENGINE_MT
-//#endif
+#include "LuaBindingUtils.h"
 
 namespace script {
     namespace lua {
-        class LuaAutoBlock
-        {
-        public:
-            LuaAutoBlock(lua_State*);
-
-            ~LuaAutoBlock();
-
-            void NullCall();
-
-        private:
-            LuaAutoBlock();
-            LuaAutoBlock(const LuaAutoBlock& src);
-            const LuaAutoBlock& operator=(const LuaAutoBlock& src);
-
-            lua_State* m_state;
-            int m_stackTop;
-        };
 
         /** A lua automatic statistics. */
         struct LuaAutoStats
@@ -57,20 +37,31 @@ namespace script {
         public:
             int addOnInited(std::function<void()> fn);
 
-            int init(const std::string& script_root_dir, lua_State *state = NULL);
+            int init(lua_State *state = nullptr);
 
             void addExtLib(lua_CFunction regfunc);
 
+            static void addExtLib(lua_State* L, lua_CFunction regfunc);
+
             void addSearchPath(const std::string& path, bool is_front = false);
+
+            static void addSearchPath(lua_State* L, const std::string& path, bool is_front = false);
 
             void addCSearchPath(const std::string& path, bool is_front = false);
 
+            static void addCSearchPath(lua_State* L, const std::string& path, bool is_front = false);
 
             void addLuaLoader(lua_CFunction func);
 
+            static void addLuaLoader(lua_State* L, lua_CFunction func);
+
             bool runCode(const char* codes);
 
+            static bool runCode(lua_State* L, const char* codes);
+
             bool runFile(const char* file_path);
+
+            static bool runFile(lua_State* L, const char* file_path);
 
             lua_State* getLuaState();
 
@@ -133,13 +124,9 @@ namespace script {
 
             std::pair<float, float> getAndResetLuaStats();
 
-            void printStack(lua_State* luaState);
-            void printTrackBack(lua_State* luaState);
+            static void printStack(lua_State* luaState);
 
-            void addPendingCode(const std::string& script);
-
-        private:
-            void run_pending_codes();
+            static void printTrackBack(lua_State* luaState);
 
         private:
             struct LuaStats{
@@ -148,14 +135,10 @@ namespace script {
             };
 
 
-            std::string script_root_dir_;
             lua_State* state_;
             std::list<std::function<void()> > on_inited_;
             
             LuaStats lua_update_stats_;
-
-
-            std::list<std::string> pending_codes_;
         };
 
     }

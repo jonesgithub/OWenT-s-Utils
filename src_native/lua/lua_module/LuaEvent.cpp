@@ -8,7 +8,7 @@
 #include <String/StringCommon.h>
 
 #include "LuaEvent.h"
-#include "../LuaEngine/LuaEngine.h"
+#include "../lua_engine/LuaEngine.h"
 
 extern "C" {
 #include "lualib.h"

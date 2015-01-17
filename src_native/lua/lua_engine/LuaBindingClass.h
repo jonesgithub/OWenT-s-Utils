@@ -16,9 +16,6 @@
 #include "LuaBindingWrapper.h"
 #include "LuaBindingUtils.h"
 #include "LuaBindingMgr.h"
-#include <Script/Lua/LuaEngine/LuaEngine.h>
-
-#include "cocos2d.h"
 
 namespace script {
     namespace lua {
@@ -36,10 +33,10 @@ namespace script {
             typedef TProxy proxy_type;
             typedef LuaBindingClass<value_type, proxy_type> self_type;
             typedef LuaBindingNamespace::static_method static_method;
-            typedef int(*member_method)(lua_State*, value_type*);
             typedef typename LuaBindingUserdataInfo<value_type>::userdata_type userdata_type;
-            typedef typename LuaBindingUserdataInfo<value_type>::userdata_ptr_type userdata_ptr_type;
-            typedef std::function<int(lua_State* L, value_type* obj)> member_proxy_method_t;
+            typedef typename LuaBindingUserdataInfo<proxy_type>::pointer_type pointer_type;
+            typedef typename LuaBindingUserdataInfo<proxy_type>::userdata_ptr_type userdata_ptr_type;
+            typedef std::function<int(lua_State*, pointer_type)> member_proxy_method_t;
 
 
             enum FUNC_TYPE {
@@ -52,12 +49,12 @@ namespace script {
             lua_CFunction default_funcs_[FT_MAX];
 
         public:
-            LuaBindingClass(const char* lua_name, const char* namespace_) : lua_class_name_(lua_name), owner_ns_(namespace_){
+            LuaBindingClass(const char* lua_name, const char* namespace_, lua_State* L) : lua_state_(L), lua_class_name_(lua_name), owner_ns_(namespace_, L){
                 register_class();
                 memset(default_funcs_, NULL, sizeof(default_funcs_));
             }
 
-            LuaBindingClass(const char* lua_name, LuaBindingNamespace& ns) : lua_class_name_(lua_name), owner_ns_(ns){
+            LuaBindingClass(const char* lua_name, LuaBindingNamespace& ns) : lua_state_(ns.getLuaState()), lua_class_name_(lua_name), owner_ns_(ns){
                 register_class();
                 memset(default_funcs_, NULL, sizeof(default_funcs_));
             }
@@ -107,37 +104,7 @@ namespace script {
             int getUserMetaTable() const { return class_metatable_; }
 
             lua_State* getLuaState() {
-                return lua::LuaEngine::Instance()->getLuaState();
-            }
-
-            /**
-             * 添加静态方法
-             *
-             * @return  self.
-             */
-            self_type& addStaticMethod(const char* method_name, static_method fn) {
-                lua_State* state = getLuaState();
-                lua_pushstring(state, method_name);
-                lua_pushlightuserdata(state, reinterpret_cast<void*>(fn));
-                lua_pushcclosure(state, __static_method_wrapper, 1);
-                lua_settable(state, getStaticClassTable());
-
-                return *this;
-            }
-
-            /**
-             * 添加成员方法
-             *
-             * @return  self.
-             */
-            self_type& addMemberMethod(const char* method_name, member_method fn) {
-                lua_State* state = getLuaState();
-                lua_pushstring(state, method_name);
-                lua_pushlightuserdata(state, reinterpret_cast<void*>(fn));
-                lua_pushcclosure(state, __member_method_wrapper, 1);
-                lua_settable(state, getMemberTable());
-
-                return *this;
+                return lua_state_;
             }
 
             /**
@@ -171,7 +138,7 @@ namespace script {
 
 
             /**
-             * 给类添加方法，自动推断类型（暂时没空实现，先用简单暴力的方法）
+             * 给类添加方法，自动推断类型
              *
              * @tparam  TF  Type of the tf.
              * @param   func_name   Name of the function.
@@ -207,8 +174,12 @@ namespace script {
                 lua_pushstring(state, func_name);
 
                 member_proxy_method_t* fn_ptr = LuaBindingPlacementNewAndDelete<member_proxy_method_t>::create(state);
-                *fn_ptr = [fn](lua_State* L, TClass* obj){
-                    return detail::unwraper_member_fn<R, TClass, TParam...>::LuaCFunction(L, obj, fn);
+                *fn_ptr = [fn](lua_State* L, pointer_type pobj){
+                    return detail::unwraper_member_fn<R, TClass, TParam...>::LuaCFunction(
+                        L, 
+                        dynamic_cast<TClass*>(pobj.get()),
+                        fn
+                    );
                 };
                 lua_pushcclosure(state, __member_method_unwrapper, 1);
                 lua_settable(state, getMemberTable());
@@ -235,8 +206,12 @@ namespace script {
                 lua_pushstring(state, func_name);
 
                 member_proxy_method_t* fn_ptr = LuaBindingPlacementNewAndDelete<member_proxy_method_t>::create(state);
-                *fn_ptr = [fn](lua_State* L, TClass* obj){
-                    return detail::unwraper_member_fn<R, TClass, TParam...>::LuaCFunction(L, obj, fn);
+                *fn_ptr = [fn](lua_State* L, pointer_type pobj){
+                    return detail::unwraper_member_fn<R, TClass, TParam...>::LuaCFunction(
+                        L, 
+                        dynamic_cast<TClass*>(pobj.get()),
+                        fn
+                    );
                 };
                 lua_pushcclosure(state, __member_method_unwrapper, 1);
                 lua_settable(state, getMemberTable());
@@ -310,6 +285,11 @@ namespace script {
              * @date    2014/10/25
              */
             void register_class() {
+                // 初始化后就不再允许新的类注册了
+                assert(false == LuaBindingMgr::Instance()->isInited());
+
+                LuaBindingClassMgrInst<proxy_type>::Instance();
+
                 lua_State* state = getLuaState();
                 // 注册C++类
                 {
@@ -366,18 +346,16 @@ namespace script {
                     lua_pushvalue(state, class_memtable_);
                     lua_settable(state, class_metatable_);
                 }
-
-                LuaBindingMgr::Instance()->addUserdataType(getLuaMetaTableName());
             }
 
             void finish_class() {
-                if (NULL == default_funcs_[FT_NEW])
+                if (nullptr == default_funcs_[FT_NEW])
                     setNew(__new);
 
-                if (NULL == default_funcs_[FT_TOSTRING])
+                if (nullptr == default_funcs_[FT_TOSTRING])
                     setToString(__tostring);
 
-                if (NULL == default_funcs_[FT_GC])
+                if (nullptr == default_funcs_[FT_GC])
                     setGC(__lua_gc);
             }
 
@@ -389,43 +367,23 @@ namespace script {
              *
              * @param [in,out]  L   If non-null, the lua_State * to process.
              *
-             * @return  null if it fails, else a value_type*.
+             * @return  null if it fails, else a pointer_type.
              */
 
-            static value_type* create(lua_State *L) {
-                proxy_type* obj = new proxy_type();
-                userdata_ptr_type pobj = static_cast<userdata_ptr_type>(lua_newuserdata(L, sizeof(userdata_type)));
-                *pobj = static_cast<value_type*>(obj);
+            static pointer_type create(lua_State *L) {
+                pointer_type obj = pointer_type(new proxy_type());
+                void* buffer = lua_newuserdata(L, sizeof(userdata_type));
+                new (buffer)userdata_type(obj);
 
                 const char* class_name = getLuaMetaTableName();
                 luaL_getmetatable(L, class_name);
                 lua_setmetatable(L, -2);
 
-                LuaBindingMgr::Instance()->addRef(pobj);
-                return *pobj;
+                // 添加到缓存表，防止被立即析构
+                LuaBindingClassMgrInst<proxy_type>::Instance()->addRef(L, obj);
+                return obj;
             }
 
-
-            static int __lua_null_gc(lua_State *L) {
-                if (0 == lua_gettop(L)) {
-                    cocos2d::log("[ERROR]: userdata __gc is called without self");
-                    lua::LuaEngine::Instance()->printTrackBack(L);
-                    return 0;
-                }
-
-                // metatable表触发
-                if (0 == lua_isuserdata(L, 1)) {
-                    lua_remove(L, 1);
-                    return 0;
-                }
-
-                // 查找并移除引用计数
-                userdata_ptr_type pobj = static_cast<userdata_ptr_type>(lua_touserdata(L, 1));
-                proxy_type* real_ptr = static_cast<proxy_type*>(*pobj);
-                LuaBindingMgr::Instance()->removeRef(real_ptr);
-
-                return 0;
-            }
         private:
             /**
              * __tostring 方法
@@ -445,7 +403,8 @@ namespace script {
                 }
 
                 std::stringstream ss;
-                value_type** pobj = static_cast<value_type**>(lua_touserdata(L, 1));
+                userdata_ptr_type pobj = static_cast<userdata_ptr_type>(lua_touserdata(L, 1));
+                pointer_type real_ptr = pobj->lock();
 
                 lua_pushliteral(L, "__type");
                 lua_gettable(L, -2);
@@ -464,7 +423,7 @@ namespace script {
                     ss<< lua_tostring(L, -1);
                 else
                     ss<< " unknown type";
-                ss<< "] @"<< *pobj;
+                ss << "] @" << real_ptr.get();
 
                 std::string str = ss.str();
                 lua_pushlstring(L, str.c_str(), str.size());
@@ -504,8 +463,7 @@ namespace script {
 
             static int __lua_gc(lua_State *L) {
                 if (0 == lua_gettop(L)) {
-                    cocos2d::log("[ERROR]: userdata __gc is called without self");
-                    lua::LuaEngine::Instance()->printTrackBack(L);
+                    fn::print_traceback(L, "userdata __gc is called without self");
                     return 0;
                 }
 
@@ -515,13 +473,9 @@ namespace script {
                     return 0;
                 }
 
+                // 析构
                 userdata_ptr_type pobj = static_cast<userdata_ptr_type>(lua_touserdata(L, 1));
-                proxy_type* real_ptr = static_cast<proxy_type*>(*pobj);
-                uint32_t ref_count = LuaBindingMgr::Instance()->removeRef(real_ptr);
-
-                if (0 == ref_count) {
-                    delete real_ptr;
-                }
+                pobj->~userdata_type();
 
                 return 0;
             }
@@ -531,7 +485,7 @@ namespace script {
              * __call 方法，不存在的方法要输出错误
              */
             //static int __call(lua_State *L) {
-            //	cocos2d::log("lua try to call invalid member method [%s].%s(%d parameters)\n",
+            //	WLOGERROR("lua try to call invalid member method [%s].%s(%d parameters)\n",
             //        getLuaMetaTableName(),
             //        luaL_checklstring(L, 1, NULL),
             //        lua_gettop(L) - 1
@@ -539,56 +493,35 @@ namespace script {
             //    return 0;
             //}
 
-
-            static int __static_method_wrapper(lua_State *L) {
-                static_method fn = reinterpret_cast<static_method>(lua_touserdata(L, lua_upvalueindex(1)));
-                if (NULL == fn) {
-                    cocos2d::log("lua try to call static method in class %s but fn not set.\n", getLuaMetaTableName());
-                    return 0;
-                }
-
-                return fn(L);
-            }
-
-            static int __member_method_wrapper(lua_State *L) {
-                member_method fn = reinterpret_cast<member_method>(lua_touserdata(L, lua_upvalueindex(1)));
-                if (NULL == fn) {
-                    cocos2d::log("lua try to call member method in class %s but fn not set.\n", getLuaMetaTableName());
-                    return 0;
-                }
-
-                const char* class_name = getLuaMetaTableName();
-                userdata_ptr_type obj = static_cast<userdata_ptr_type>(luaL_checkudata(L, 1, class_name));  // get 'self'
-                lua_remove(L, 1);
-
-                if (NULL == obj) {
-                	cocos2d::log("lua try to call %s's member method but self not set.\n", class_name);
-                    return 0;
-                }
-
-                return fn(L, *obj);
-            }
-
             static int __member_method_unwrapper(lua_State *L) {
                 member_proxy_method_t* fn = reinterpret_cast<member_proxy_method_t*>(lua_touserdata(L, lua_upvalueindex(1)));
-                if (NULL == fn) {
-                    cocos2d::log("lua try to call member method in class %s but fn not set.\n", getLuaMetaTableName());
+                if (nullptr == fn) {
+                    WLOGERROR("lua try to call member method in class %s but fn not set.\n", getLuaMetaTableName());
                     return 0;
                 }
 
                 const char* class_name = getLuaMetaTableName();
-                userdata_ptr_type obj = static_cast<userdata_ptr_type>(luaL_checkudata(L, 1, class_name));  // get 'self'
-                lua_remove(L, 1);
+                userdata_ptr_type pobj = static_cast<userdata_ptr_type>(luaL_checkudata(L, 1, class_name));  // get 'self'
 
-                if (NULL == obj) {
-                    cocos2d::log("lua try to call %s's member method but self not set.\n", class_name);
+                if (nullptr == pobj) {
+                    WLOGERROR("lua try to call %s's member method but self not set or type error.\n", class_name);
                     return 0;
                 }
 
-                return (*fn)(L, *obj);
+                pointer_type obj_ptr = pobj->lock();
+                lua_remove(L, 1);
+
+                if (!obj_ptr) {
+                    WLOGERROR("lua try to call %s's member method but this=nullptr.\n", class_name);
+                    return 0;
+                }
+
+                return (*fn)(L, obj_ptr);
             }
 
         private:
+            lua_State* lua_state_;
+
             std::string lua_class_name_;
             LuaBindingNamespace owner_ns_;
             LuaBindingNamespace as_ns_;

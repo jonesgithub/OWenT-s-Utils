@@ -1,12 +1,15 @@
 ﻿#pragma once
 
 #include <string>
+#include <cstring>
 #include <sstream>
 #include <cstdio>
 #include <list>
 #include <vector>
 #include <tuple>
+#include <array>
 #include <typeinfo>
+#include <memory>
 
 #include <std/explicit_declare.h>
 
@@ -19,7 +22,50 @@
 
 namespace script {
     namespace lua {
+        /*************************************\
+        |*  以下是一些拓展类型，用于一系列优化目的   *|
+        \*************************************/
+
+        struct string_buffer {
+            typedef std::string::value_type value_type;
+            const value_type* data;
+            size_t length;
+
+            string_buffer(const value_type* d) : data(d), length(strlen(d) + 1){}
+            string_buffer(const value_type* d, size_t s) : data(d), length(s){}
+        };
+
+        /*************************************\
+        |*  以上是一些拓展类型，用于一系列优化目的   *|
+        \*************************************/
+
         namespace detail {
+
+            /*************************************\
+            |* 以下type_traits用于枚举动态模板参数下标 *|
+            \*************************************/
+
+            template<int... _index>
+            struct index_seq_list{ typedef index_seq_list<_index..., sizeof...(_index)> next_type; };
+
+            template <typename... TP>
+            struct build_args_index;
+
+            template <>
+            struct build_args_index<>
+            {
+                typedef index_seq_list<> index_seq_type;
+            };
+
+            template <typename TP1, typename... TP>
+            struct build_args_index<TP1, TP...>
+            {
+                typedef typename build_args_index<TP...>::index_seq_type::next_type index_seq_type;
+            };
+
+            /*************************************\
+            |* 以上type_traits用于枚举动态模板参数下标 *|
+            \*************************************/
 
             template<typename Ty>
             struct wraper_var_lua_type;
@@ -69,6 +115,19 @@ namespace script {
             };
 
             template<typename Ty>
+            struct wraper_ptr_var_lua_type {
+                typedef Ty value_type;
+
+                template<typename TParam>
+                static int wraper(lua_State* L, TParam&& v) {
+                    static_assert(std::is_pointer<TParam>::value, "parameter must be a pointer");
+
+                    lua_pushlightuserdata(L, v);
+                    return 1;
+                }
+            };
+
+            template<typename Ty>
             struct wraper_var_lua_type {
                 typedef Ty value_type;
 
@@ -79,23 +138,12 @@ namespace script {
                             typename std::remove_pointer<Ty>::type
                         >::type
                     >::type obj_t;
-
-                    const char* clazz_name = LuaBindingUserdataInfo<obj_t>::getLuaMetaTableName();
-                    if (!LuaBindingMgr::Instance()->isUserdataRegistered(clazz_name)) {
-                        lua_pushlightuserdata(L, reinterpret_cast<void*>(v));
-                        return 1;
-                    }
                     
-                    typedef typename LuaBindingUserdataInfo<obj_t>::userdata_type ud_t;
-                    ud_t* ptr = reinterpret_cast<ud_t*>(lua_newuserdata(L, sizeof(ud_t)));
+                    // 最好是不要这么用，如果有需要再加对非POD类型的支持吧 
+                    static_assert(std::is_pod<obj_t>::value, "custom type must be pod type");
 
-                    luaL_getmetatable(L, clazz_name);
-                    lua_setmetatable(L, -2);
-
-                    *ptr = v;
-
-                    // 添加引用计数
-                    LuaBindingMgr::Instance()->addRef(*ptr);
+                    obj_t* ptr = reinterpret_cast<obj_t*>(lua_newuserdata(L, sizeof(obj_t)));
+                    memcpy(ptr, &v, sizeof(v));
 
                     return 1;
                 }
@@ -147,6 +195,48 @@ namespace script {
             struct wraper_var<const char*, Ty...> {
                 static int wraper(lua_State* L, const char* v) {
                     lua_pushstring(L, v);
+                    return 1;
+                }
+            };
+
+            template<typename... Ty>
+            struct wraper_var<::script::lua::string_buffer, Ty...> {
+                static int wraper(lua_State* L, const ::script::lua::string_buffer& v) {
+                    lua_pushlstring(L, v.data, v.length);
+                    return 1;
+                }
+            };
+
+            // 注册类的打解包 
+            template<typename TC, typename... Ty>
+            struct wraper_var<std::shared_ptr<TC>, Ty...> {
+                static int wraper(lua_State* L, const std::shared_ptr<TC>& v) {
+                    typedef typename LuaBindingUserdataInfo<TC>::userdata_type ud_t;
+
+                    void* buff = lua_newuserdata(L, sizeof(ud_t));
+                    new (buff)ud_t(v);
+
+                    const char* class_name = LuaBindingUserdataInfo<TC>::getLuaMetaTableName();
+                    luaL_getmetatable(L, class_name);
+
+                    lua_setmetatable(L, -2);
+                    return 1;
+                }
+            };
+
+            // 注册类的打解包 
+            template<typename TC, typename... Ty>
+            struct wraper_var<std::weak_ptr<TC>, Ty...> {
+                static int wraper(lua_State* L, const std::weak_ptr<TC>& v) {
+                    typedef typename LuaBindingUserdataInfo<TC>::userdata_type ud_t;
+
+                    void* buff = lua_newuserdata(L, sizeof(ud_t));
+                    new (buff)ud_t(v);
+
+                    const char* class_name = LuaBindingUserdataInfo<TC>::getLuaMetaTableName();
+                    luaL_getmetatable(L, class_name);
+
+                    lua_setmetatable(L, -2);
                     return 1;
                 }
             };
@@ -250,7 +340,17 @@ namespace script {
             template<typename TLeft, typename TRight, typename... Ty>
             struct wraper_var<std::pair<TLeft, TRight>, Ty...> {
                 static int wraper(lua_State* L, const std::pair<TLeft, TRight>& v) {
-                    return wraper_var<TLeft>::wraper(L, v.first) + wraper_var<TRight>::wraper(L, v.second);
+                    lua_createtable(L, 2, 0);
+
+                    lua_pushinteger(L, 1);
+                    wraper_var<TLeft>::wraper(L, v.first);
+                    lua_settable(L, -3);
+
+                    lua_pushinteger(L, 2);
+                    wraper_var<TRight>::wraper(L, v.second);
+                    lua_settable(L, -3);
+
+                    return 1;
                 }
             };
             
@@ -291,19 +391,135 @@ namespace script {
                     return 1;
                 }
             };
+
+            template<typename Ty, size_t SIZE, typename... Tl>
+            struct wraper_var<std::array<Ty, SIZE>, Tl...> {
+                static int wraper(lua_State* L, const std::array<Ty, SIZE>& v) {
+                    lua_Unsigned res = 1;
+                    lua_newtable(L);
+                    int tb = lua_gettop(L);
+                    for (const Ty& ele : v) {
+                        // 目前只支持一个值
+                        lua_pushunsigned(L, res);
+                        wraper_var<Ty>::wraper(L, ele);
+                        lua_settable(L, -3);
+
+                        ++res;
+                    }
+                    lua_settop(L, tb);
+                    return 1;
+                }
+            };
+
             // --------------- stl 扩展 ----------------
             
             template<typename Ty, typename... Tl>
             struct wraper_var : public std::conditional<
                 std::is_enum<Ty>::value,
                 wraper_var_lua_type<lua_Unsigned>,
-                wraper_var_lua_type<Ty>
+                typename std::conditional<
+                    std::is_pointer<Ty>::value,
+                    wraper_ptr_var_lua_type<Ty>,
+                    wraper_var_lua_type<Ty>
+                >::type 
             >::type {};
 
-            //template<>
-            struct static_method_wrapper {
 
+            struct wraper_bat_cmd {
+                template<typename TupleT, int N>
+                struct runner {
+                    int operator()(lua_State* L, TupleT& t) {
+                        return detail::wraper_var<
+                            typename std::remove_const<
+                                typename std::remove_reference<
+                                    typename std::tuple_element<N, TupleT>::type
+                                >::type
+                            >::type
+                        >::wraper(L, std::get<N>(t));
+                    }
+                };
+
+                template<class TupleT, int... N>
+                static int wraper_bat_count(lua_State* L, TupleT&& t, index_seq_list<N...>) {
+                    std::function<int(lua_State*, TupleT&)> funcs[] = {
+                        runner<TupleT, N>()...
+                    };
+
+                    int ret = 0;
+                    for (std::function<int(lua_State*, TupleT&)>& func : funcs) {
+                        ret += func(L, t);
+                    }
+
+                    return ret;
+                }
             };
         }
+
+        /**
+         * @brief 自动打包调用lua函数
+         * @return 参数个数，如果返回值小于0则不会改变参数个数
+         */
+        template<typename... TParams>
+        int auto_call(lua_State* L, int index, TParams&&... params) {
+            int top = lua_gettop(L);
+            int hmsg = script::lua::fn::get_pcall_hmsg(L);
+            
+            int fn_index = index > 0 ? index : index - 1;
+
+            if (!lua_isfunction(L, fn_index)) {
+                WLOGERROR("var in lua stack %d is not a function.", index);
+                lua_pop(L, 1);
+                return LUA_ERRRUN;
+            }
+            
+            lua_pushvalue(L, fn_index);
+
+            int param_num = detail::wraper_bat_cmd::wraper_bat_count(
+                L, 
+                std::forward_as_tuple(params...),
+                typename detail::build_args_index<TParams...>::index_seq_type()
+            );
+
+            int res = lua_pcall(L, param_num, LUA_MULTRET, hmsg);
+            if (res) {
+                WLOGERROR("call stack %d error. ret code: %d\n%s", index, res, lua_tostring(L, -1));
+                lua_settop(L, top);
+            } else {
+                // 移除hmsg
+                lua_remove(L, hmsg);
+            }
+
+            return res ? res: (lua_gettop(L) - top);
+        };
+
+        template<typename... TParams>
+        int auto_call(lua_State* L, const std::string& path, TParams&&... params) {
+            int top = lua_gettop(L);
+            int hmsg = script::lua::fn::get_pcall_hmsg(L);
+
+            fn::load_item(L, path);
+            if (!lua_isfunction(L, -1)) {
+                WLOGERROR("var in lua stack %s is not a function.", path.c_str());
+                lua_settop(L, top);
+                return LUA_ERRRUN;
+            }
+
+            int param_num = detail::wraper_bat_cmd::wraper_bat_count(
+                L,
+                std::forward_as_tuple(params...),
+                typename detail::build_args_index<TParams...>::index_seq_type()
+            );
+
+            int res = lua_pcall(L, param_num, LUA_MULTRET, hmsg);
+            if (res) {
+                WLOGERROR("call stack %s error. ret code: %d\n%s", path.c_str(), res, lua_tostring(L, -1));
+                lua_settop(L, top);
+            } else {
+                // 移除hmsg
+                lua_remove(L, hmsg);
+            }
+
+            return res ? res : (lua_gettop(L) - top);
+        };
     }
 }

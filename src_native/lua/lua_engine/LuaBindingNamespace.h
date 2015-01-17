@@ -4,7 +4,6 @@
 #include <list>
 #include <std/explicit_declare.h>
 
-#include <Script/Lua/LuaEngine/LuaEngine.h>
 #include "LuaBindingUnwrapper.h"
 #include "LuaBindingWrapper.h"
 
@@ -28,7 +27,7 @@ namespace script {
 
         public:
             LuaBindingNamespace();
-            LuaBindingNamespace(const char* namespace_);
+            LuaBindingNamespace(const char* namespace_, lua_State* L);
 
             /**
              * 在namespace的基础上再构建namespace
@@ -43,7 +42,7 @@ namespace script {
             /**
              * 开启命名空间
              */
-            bool open(const char* namespace_);
+            bool open(const char* namespace_, lua_State* L);
 
             /**
              * 关闭命名空间，重置lua栈top
@@ -87,14 +86,6 @@ namespace script {
             */
             self_type& addConst(const char* const_name, const char* n, size_t s);
 
-
-            /**
-            * 添加静态方法
-            *
-            * @return  self.
-            */
-            self_type& addStaticMethod(const char* method_name, static_method fn);
-
             /**
              * 给命名空间添加方法，自动推断类型（暂时没空实现，先用简单暴力的方法）
              *
@@ -122,6 +113,7 @@ namespace script {
             bool find_ns();
             void build_ns_set(const char* namespace_);
 
+            lua_State* lua_state_;
             std::list<std::string> ns_;
             int base_stack_top_;
             int this_ns_;

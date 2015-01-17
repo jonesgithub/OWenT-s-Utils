@@ -1,7 +1,7 @@
 --region data.conf_manager.lua
 --Author : OWenT
 --Date   : 2014/10/29
---Æô¶¯ÔØÈëÏî
+--å¯åŠ¨è½½å…¥é¡¹
 
 local class = require('utils.class')
 local loader = require('utils.loader')
@@ -59,10 +59,15 @@ end
 
 local conf_manager = class.register('data.conf_manager', class.singleton)
 
+conf_manager.__path_rule = '%s'
 conf_manager.__data = {}
 
+function conf_manager:set_path_rule(rule)
+    self.__path_rule = rule
+end
+
 function conf_manager:load(path, kv_fn)
-    path = string.format('data.%s', tostring(path))
+    path = string.format(self.__path_rule, tostring(path))
     local tb = loader.load(path)
     if nil == tb then
         log_error('load cfg [%s] failed', path)
@@ -80,7 +85,7 @@ function conf_manager:load(path, kv_fn)
             conf_manager.__data[k] = conf_manager.__data[k] or conf_set.new({__data = {}})
             local cfg = conf_manager.__data[k]
             for ck, cv in ipairs(v) do
-                local rv = class.set_readonly(cv)
+                local rv = cv
                 local rk = { kv_fn(ck, rv) }
                 if cfg:get_by_table(rk) then
                     log_warn('config [%s] already has key %s, old record will be covered', path, table.concat(rk, ', '))
@@ -92,10 +97,13 @@ function conf_manager:load(path, kv_fn)
         end
     end
 
-    -- ÊÍ·Å×ÊÔ´
+    -- é‡Šæ”¾èµ„æº
     loader.remove(path)
 end
 
+function conf_manager:set_readonly()
+    self.__data = class.set_readonly(self.__data)
+end
 
 function conf_manager:get(type_name)
     return self.__data[type_name] or nil

@@ -5,15 +5,13 @@
 #include <stdint.h>
 #include <cstddef>
 #include <cstdio>
-#include <list>
-#include <vector>
-#include <tuple>
 #include <functional>
 #include <type_traits>
 
 #include <std/explicit_declare.h>
 
 #include "LuaBindingWrapper.h"
+#include "../lua_module/LuaAdaptor.h"
 
 namespace script {
     namespace lua {
@@ -71,6 +69,26 @@ namespace script {
             };
 
             template<typename Tt, typename Ty>
+            struct unwraper_ptr_var_lua_type {
+                typedef Ty value_type;
+
+                static Tt unwraper(lua_State* L, int index) {
+                    if (lua_gettop(L) < index)
+                        return nullptr;
+
+                    if (lua_isnil(L, index)) {
+                        return nullptr;
+                    }
+
+                    if (!lua_islightuserdata(L, index)) {
+                        return nullptr;
+                    }
+
+                    return reinterpret_cast<Tt>(lua_topointer(L, index));
+                }
+            };
+
+            template<typename Tt, typename Ty>
             struct unwraper_var_lua_type {
                 typedef Ty value_type;
 
@@ -81,23 +99,17 @@ namespace script {
                         >::type
                     >::type obj_t;
 
+                    // 最好是不要这么用，如果有需要再加对非POD类型的支持吧 
+                    static_assert(std::is_pod<obj_t>::value, "custom type must be pod type");
+
                     if (lua_gettop(L) < index)
                         return static_cast<Tt>(nullptr);
-
-                    typedef typename LuaBindingUserdataInfo<obj_t>::userdata_type ud_t;
-                    const char* clazz_name = LuaBindingUserdataInfo<obj_t>::getLuaMetaTableName();
-
-                    if (!LuaBindingMgr::Instance()->isUserdataRegistered(clazz_name)) {
-                        return static_cast<Tt>(
-                            const_cast<void*>(lua_topointer(L, index))
-                        );
-                    }
 
                     if (lua_isnil(L, index)) {
                         return static_cast<Tt>(nullptr);
                     }
 
-                    ud_t* ptr = reinterpret_cast<ud_t*>(luaL_checkudata(L, index, clazz_name));
+                    obj_t* ptr = reinterpret_cast<obj_t*>(lua_touserdata(L, index));
                     if (nullptr == ptr) {
                         return static_cast<Tt>(nullptr);
                     }
@@ -159,6 +171,50 @@ namespace script {
                         return static_cast<char*>(nullptr);
 
                     return const_cast<char*>(luaL_checkstring(L, index));
+                }
+            };
+
+            template<typename... Ty>
+            struct unwraper_var<::script::lua::string_buffer, Ty...> {
+                static ::script::lua::string_buffer unwraper(lua_State* L, int index) {
+                    ::script::lua::string_buffer ret(nullptr, 0);
+
+                    ret.data = luaL_checklstring(L, index, &ret.length);
+                    return ret;
+                }
+            };
+
+            // 注册类的打解包 
+            template<typename TC, typename... Ty>
+            struct unwraper_var<std::shared_ptr<TC>, Ty...> {
+                static std::shared_ptr<TC> unwraper(lua_State* L, int index) {
+                    typedef typename LuaBindingUserdataInfo<TC>::userdata_type ud_t;
+
+                    const char* class_name = LuaBindingUserdataInfo<TC>::getLuaMetaTableName();
+                    ud_t* watcher = static_cast<ud_t*>(luaL_checkudata(L, index, class_name));
+
+                    if (nullptr == watcher) {
+                        return std::shared_ptr<TC>();
+                    }
+
+                    return watcher.lock();
+                }
+            };
+
+            // 注册类的打解包 
+            template<typename TC, typename... Ty>
+            struct unwraper_var<std::weak_ptr<TC>, Ty...> {
+                static std::weak_ptr<TC> unwraper(lua_State* L, int index) {
+                    typedef typename LuaBindingUserdataInfo<TC>::userdata_type ud_t;
+
+                    const char* class_name = LuaBindingUserdataInfo<TC>::getLuaMetaTableName();
+                    ud_t* watcher = static_cast<ud_t*>(luaL_checkudata(L, index, class_name));
+
+                    if (nullptr == watcher) {
+                        return std::weak_ptr<TC>();
+                    }
+
+                    return watcher;
                 }
             };
 
@@ -272,8 +328,19 @@ namespace script {
             struct unwraper_var<std::pair<TLeft, TRight>, Ty...> {
                 static std::pair<TLeft, TRight> unwraper(lua_State* L, int index) {
                     std::pair<TLeft, TRight> ret;
-                    ret.first = unwraper_var<TLeft>::unwraper(L, index);
-                    ret.second = unwraper_var<TRight>::unwraper(L, index + 1);
+
+                    lua_pushvalue(L, index);
+
+                    lua_pushinteger(L, 1);
+                    lua_gettable(L, -2);
+                    ret.first = unwraper_var<TLeft>::unwraper(L, -1);
+
+                    lua_pushinteger(L, 2);
+                    lua_gettable(L, -3);
+                    ret.second = unwraper_var<TRight>::unwraper(L, -1);
+
+                    lua_pop(L, 3);
+
                     return ret;
                 }
             };
@@ -282,15 +349,18 @@ namespace script {
             struct unwraper_var<std::vector<Ty>, Tl...> {
                 static std::vector<Ty> unwraper(lua_State* L, int index) {
                     std::vector<Ty> ret;
-
                     LUA_GET_TABLE_LEN(size_t len, L, index);
                     ret.reserve(len);
+
+                    lua_pushvalue(L, index);
                     for (size_t i = 1; i <= len; ++i) {
                         lua_pushinteger(L, static_cast<lua_Unsigned>(i));
-                        lua_gettable(L, index);
+                        lua_gettable(L, -2);
                         ret.push_back(unwraper_var<Ty>::unwraper(L, -1));
                         lua_pop(L, 1);
                     }
+                    lua_pop(L, 1);
+
                     return ret;
                 }
             };
@@ -300,12 +370,35 @@ namespace script {
                 static std::list<Ty> unwraper(lua_State* L, int index) {
                     std::list<Ty> ret;
                     LUA_GET_TABLE_LEN(size_t len, L, index);
+
+                    lua_pushvalue(L, index);
                     for (size_t i = 1; i <= len; ++i) {
                         lua_pushinteger(L, static_cast<lua_Unsigned>(i));
-                        lua_gettable(L, index);
+                        lua_gettable(L, -2);
                         ret.push_back(unwraper_var<Ty>::unwraper(L, -1));
                         lua_pop(L, 1);
                     }
+                    lua_pop(L, 1);
+
+                    return ret;
+                }
+            };
+
+            template<typename Ty, size_t SIZE, typename... Tl>
+            struct unwraper_var<std::array<Ty, SIZE>, Tl...> {
+                static std::array<Ty, SIZE> unwraper(lua_State* L, int index) {
+                    std::array<Ty, SIZE> ret;
+                    LUA_GET_TABLE_LEN(size_t len, L, index);
+
+                    lua_pushvalue(L, index);
+                    for (size_t i = 1; i <= len && i <= SIZE; ++i) {
+                        lua_pushinteger(L, static_cast<lua_Unsigned>(i));
+                        lua_gettable(L, -2);
+                        ret[i] = unwraper_var<Ty>::unwraper(L, -1);
+                        lua_pop(L, 1);
+                    }
+                    lua_pop(L, 1);
+
                     return ret;
                 }
             };
@@ -321,51 +414,22 @@ namespace script {
                 }
             };
 
-            template<typename... Ty>
-            struct unwraper_var<const std::string, Ty...> {
-                static const std::string unwraper(lua_State* L, int index) {
-                    std::string ret;
-                    size_t len = 0;
-                    const char* start = luaL_checklstring(L, index, &len);
-                    ret.assign(start, len);
-                    return ret;
-                }
-            };
-
             // --------------- stl 扩展 ----------------
 
             template<typename Ty, typename... Tl>
             struct unwraper_var : public std::conditional<
                 std::is_enum<Ty>::value,
                 unwraper_var_lua_type<Ty, lua_Unsigned>,
-                unwraper_var_lua_type<Ty, Ty>
+                typename std::conditional<
+                    std::is_pointer<Ty>::value,
+                    unwraper_ptr_var_lua_type<Ty, Ty>,
+                    unwraper_var_lua_type<Ty, Ty>
+                >::type
             >::type {};
 
-            /*************************************\
-            |* 以下type_traits用于枚举动态模板参数下标 *|
-            \*************************************/
 
-            template<int... _index>
-            struct index_seq_list{ typedef index_seq_list<_index..., sizeof...(_index)> next_type; };
+            // --------------- 解包装接口结束 ----------------
 
-            template <typename... TP>
-            struct build_args_index;
-
-            template <>
-            struct build_args_index<>
-            {
-                typedef index_seq_list<> index_seq_type;
-            };
-
-            template <typename TP1, typename... TP>
-            struct build_args_index<TP1, TP...>
-            {
-                typedef typename build_args_index<TP...>::index_seq_type::next_type index_seq_type;
-            };
-
-            /*************************************\
-            |* 以上type_traits用于枚举动态模板参数下标 *|
-            \*************************************/
             template<typename Tr>
             struct unwraper_static_fn_base;
 
@@ -415,12 +479,14 @@ namespace script {
                 // 动态参数个数
                 static int LuaCFunction(lua_State* L) {
                     value_type fn = reinterpret_cast<value_type>(lua_touserdata(L, lua_upvalueindex(1)));
-                    if (NULL == fn) {
+                    if (nullptr == fn) {
                         // 找不到函数
                         return 0;
                     }
 
-                    return base_type::template run_fn<value_type, std::tuple<TParam...> >(L,
+                    return base_type::template run_fn<value_type, std::tuple<
+                        typename std::remove_const<typename std::remove_reference<TParam>::type>::type...
+                    > >(L,
                         fn,
                         typename build_args_index<TParam...>::index_seq_type()
                     );
@@ -441,7 +507,9 @@ namespace script {
                         return (obj->*fn)(std::forward<TParam>(args)...);
                     };
 
-                    return base_type::template run_fn<decltype(fn_wraper), std::tuple<TParam...> >(
+                    return base_type::template run_fn<decltype(fn_wraper), std::tuple<
+                        typename std::remove_const<typename std::remove_reference<TParam>::type>::type...
+                    > >(
                         L,
                         fn_wraper,
                         typename build_args_index<TParam...>::index_seq_type()
@@ -454,7 +522,9 @@ namespace script {
                         return (obj->*fn)(std::forward<TParam>(args)...);
                     };
 
-                    return base_type::template run_fn<decltype(fn_wraper), std::tuple<TParam...> >(
+                    return base_type::template run_fn<decltype(fn_wraper), std::tuple<
+                        typename std::remove_const<typename std::remove_reference<TParam>::type>::type...
+                    > >(
                         L,
                         fn_wraper,
                         typename build_args_index<TParam...>::index_seq_type()

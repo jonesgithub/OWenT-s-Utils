@@ -3,19 +3,39 @@
 #include <string>
 #include <cstdio>
 #include <typeinfo>
+#include <memory>
 
 #include <std/explicit_declare.h>
-#include "../LuaModule/LuaAdaptor.h"
 
-#include "cocos2d.h"
+#include "log/LogWrapper.h"
+
+#include "../lua_module/LuaAdaptor.h"
 
 namespace script {
     namespace lua {
 
+        class LuaAutoBlock
+        {
+        public:
+            LuaAutoBlock(lua_State*);
+
+            ~LuaAutoBlock();
+
+            void NullCall();
+
+        private:
+            LuaAutoBlock(const LuaAutoBlock& src) FUNC_DELETE;
+            const LuaAutoBlock& operator=(const LuaAutoBlock& src) FUNC_DELETE;
+
+            lua_State* m_state;
+            int m_stackTop;
+        };
+
         template<typename TC>
         struct LuaBindingUserdataInfo {
             typedef TC value_type;
-            typedef value_type* userdata_type;
+            typedef std::shared_ptr<value_type> pointer_type;
+            typedef std::weak_ptr<value_type> userdata_type;
             typedef userdata_type* userdata_ptr_type;
 
             static const char* getLuaMetaTableName() {
@@ -55,7 +75,7 @@ namespace script {
 
             template<typename... TParams>
             static value_type* create(lua_State *L, TParams... params) {
-                value_type* obj = new (lua_newuserdata(L, sizeof(value_type))) value_type(params...);
+                value_type* obj = new (lua_newuserdata(L, sizeof(value_type))) value_type(std::forward(params)...);
 
                 pushMetatable(L);
                 lua_setmetatable(L, -2);
@@ -75,7 +95,7 @@ namespace script {
 
             static int __lua_gc(lua_State *L) {
                 if (0 == lua_gettop(L)) {
-                    luaL_dostring(L, "log_error('[ERROR]: userdata __gc is called without self')");
+                    WLOGERROR("userdata __gc is called without self");
                     return 0;
                 }
 
@@ -87,7 +107,7 @@ namespace script {
 
                 auto obj = static_cast<value_type*>(luaL_checkudata(L, 1, LuaBindingUserdataInfo<value_type>::getLuaMetaTableName()));
                 if (nullptr == obj) {
-                    cocos2d::log("[ERROR]: try to convert userdata to %s but failed", LuaBindingUserdataInfo<value_type>::getLuaMetaTableName());
+                    WLOGERROR("try to convert userdata to %s but failed", LuaBindingUserdataInfo<value_type>::getLuaMetaTableName());
                     return 0;
                 }
                 // 执行析构，由lua负责释放内存
@@ -96,5 +116,27 @@ namespace script {
             }
         };
 
+
+        namespace fn {
+            int get_pcall_hmsg(lua_State* L);
+
+            bool load_item(lua_State* L, const std::string& path, bool auto_create_table = false);
+
+            bool load_item(lua_State* L, const std::string& path, int table_index, bool auto_create_table = false);
+
+            bool remove_item(lua_State* L, const std::string& path);
+
+            bool remove_item(lua_State* L, const std::string& path, int table_index);
+
+            void print_stack(lua_State* L);
+
+            void print_traceback(lua_State* L, const std::string& msg);
+
+            bool exec_file(lua_State* L, const char* file_path);
+
+            bool exec_code(lua_State* L, const char* codes);
+
+            int lua_stackdump(lua_State* L);
+        }
     }
 }
