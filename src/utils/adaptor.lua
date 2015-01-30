@@ -22,64 +22,63 @@ if nil == package.searchers then
     package.searchers = package.loaders or nil
 end
 
--- 高级适配，输出重定向
--- 同时兼容LuaLog和lua_log
-if nil == _G.LuaLog and nil == _G.lua_log then
-    _G.lua_log = function(fmt, ...)
-        print(string.format(fmt, ...))
+-- 高级适配，日志输出重定向
+if nil ~= _G.lua_log_level_t then
+    conf.LOG_LEVEL = _G.lua_log_level_t
+    _G.lua_log_level_t = nil
+end
+
+_G.lua_log_check = function(l)
+    return l >= conf.log_min_level and l <= conf.log_max_level
+end
+
+if nil == _G.lua_log then
+    _G.lua_log = function(log_level, fmt, ...)
+        if lua_log_check(log_level) then
+            print(string.format(fmt, ...))
+        end
     end
 
 else
-    local log_fn = _G.lua_log or _G.LuaLog
-    _G.lua_log = function(fmt, ...)
-        log_fn(string.format(fmt, ...))
+    local log_fn = _G.lua_log
+    _G.lua_log = function(log_level, fmt, ...)
+        if lua_log_check(log_level) then
+            log_fn(log_level, string.format(fmt, ...))
+        end
     end
     
     _G.print = function(...)
         local args = {...}
         for k, v in ipairs(args) do
-            _G.lua_log("%s", tostring(v))
+            _G.lua_log(conf.LOG_LEVEL.FATAL, "%s", tostring(v))
         end
     end
 end
-_G.LuaLog = _G.lua_log
 
 do
     _G.log_fatel = function(fmt, ...)
         fmt = fmt or ''
-        lua_log('[FATEL]: ' .. fmt, ...)
+        lua_log(conf.LOG_LEVEL.FATAL, '[FATAL]: ' .. fmt, ...)
     end
 
     _G.log_debug = function(fmt, ...)
-        if conf.log < conf.LOG_LEVEL.DEBUG then
-            return
-        end
         fmt = fmt or ''
-        lua_log('[DEBUG]: ' .. fmt, ...)
+        lua_log(conf.LOG_LEVEL.DEBUG, '[DEBUG]: ' .. fmt, ...)
     end
 
     _G.log_info = function(fmt, ...)
-        if conf.log < conf.LOG_LEVEL.INFO then
-            return
-        end
         fmt = fmt or ''
-        lua_log('[INFO]: ' .. fmt, ...)
+        lua_log(conf.LOG_LEVEL.INFO, '[INFO]: ' .. fmt, ...)
     end
 
     _G.log_warn = function(fmt, ...)
-        if conf.log < conf.LOG_LEVEL.WARN then
-            return
-        end
         fmt = fmt or ''
-        lua_log('[WARN]: ' .. fmt, ...)
+        lua_log(conf.LOG_LEVEL.WARNING, '[WARN]: ' .. fmt, ...)
     end
 
     _G.log_error = function(fmt, ...)
-        if conf.log < conf.LOG_LEVEL.ERROR then
-            return
-        end
         fmt = fmt or ''
-        lua_log('%s\n[ERROR]: ' .. fmt, debug.traceback('[ERROR]: ', 2), ...)
+        lua_log(conf.LOG_LEVEL.ERROR, '%s\n[ERROR]: ' .. fmt, debug.traceback('[ERROR]: ', 2), ...)
     end
     
     _G.log_stream = {}
@@ -91,7 +90,7 @@ do
         end
 
         function _G.log_stream:flush()
-            log_fatel(data_cache)
+            log_debug(data_cache)
             data_cache = ''
         end
     end

@@ -5,14 +5,16 @@
 
 return {
     LOG_LEVEL = {
-        FATEL   = 0,
-        ERROR   = 1,
-        WARN    = 2,
-        INFO    = 3,
-        DEBUG   = 4,
-        ALL     = 5,
+        DISABLED    = 0,
+        FATAL       = 1,
+        ERROR       = 2,
+        WARNING     = 3,
+        INFO        = 4,
+        NOTICE      = 5,
+        DEBUG       = 6,
     },
-    log = 5,
+    log_min_level = 1,
+    log_max_level = 6,
     debug_mode = true,
     
     app_setting = {

@@ -5,9 +5,7 @@ do
     end
 
     if _G.lua_log then
-        lua_log(info)
-    elseif _G.LuaLog then
-        LuaLog(info)
+        lua_log(1, info)
     else
         print(info)
     end
@@ -18,12 +16,12 @@ math.randomseed(os.time())
 local loader = require('utils.loader')
 require('utils.event')
 
--- ÄÇÉ¶cocos2d»á¹Ø±Õ±ê×¼ÊäÈëÊä³öº¯Êı, »áµ¼ÖÂvardumpÎŞÊä³ö
+-- é‚£å•¥cocos2dä¼šå…³é—­æ ‡å‡†è¾“å…¥è¾“å‡ºå‡½æ•°, ä¼šå¯¼è‡´vardumpæ— è¾“å‡º
 do
     _G.vardump_default.ostream = log_stream
 end
 
--- ×¢²áËùÓĞgameÏÂµÄtableÎªÃüÃû¿Õ¼ä
+-- æ³¨å†Œæ‰€æœ‰gameä¸‹çš„tableä¸ºå‘½åç©ºé—´
 do
     local class = loader.load('utils.class')
     local function reg_game_namespace(tb, prefix, name, base_type)
@@ -31,12 +29,12 @@ do
         prefix = this_path .. '.'
 
         for k, v in pairs(tb) do
-            -- ÃüÃû¿Õ¼ä×¢²á»ùÀà
+            -- å‘½åç©ºé—´æ³¨å†ŒåŸºç±»
             if 'table' == type(v) and nil == getmetatable(v) then
                 reg_game_namespace(v, prefix, k, class.namespace)
             end
 
-            -- nativeÀà×¢²á»ùÀà
+            -- nativeç±»æ³¨å†ŒåŸºç±»
             if 'table' == type(v) and nil ~= getmetatable(v) and nil == v.__index then
                 reg_game_namespace(v, prefix, k, class.native)
             end
@@ -48,7 +46,7 @@ do
     reg_game_namespace(game, '', 'game', class.namespace)
 end
 
--- ¼ÓÔØbootstrap
+-- åŠ è½½bootstrap
 loader.load_list('bootstrap')
 
 
