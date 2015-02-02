@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file SpinLock.h
  * @brief 自旋锁
  * Licensed under the MIT licenses.
@@ -69,7 +69,7 @@
          * http://www.intel.com/content/www/us/en/processors/itanium/itanium-architecture-vol-3-manual.html
          */
         #define __UTIL_LOCK_SPIN_LOCK_PAUSE() __asm__ __volatile__ ("hint @pause")
-    #elif defined(__arm__)
+    #elif defined(__arm__) && !defined(__ANDROID__)
         /**
          * See: ARM Architecture Reference Manuals (YIELD)
          * http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.subset.architecture.reference/index.html
@@ -150,7 +150,6 @@ namespace util
 {
     namespace lock
     {
-
         // C++ 0x/11版实现
         #ifdef __UTIL_LOCK_SPINLOCK_ATOMIC_STD
         class SpinLock
