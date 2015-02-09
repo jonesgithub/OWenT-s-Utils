@@ -1,7 +1,7 @@
 #!/bin/bash
  
 # ======================================= 配置 ======================================= 
-PREFIX_DIR=/usr/local/gcc-4.8.3
+PREFIX_DIR=/usr/local/gcc-4.8.4
 BUILD_TARGET_COMPOMENTS="";
 
 # ======================= 非交叉编译 ======================= 
@@ -271,7 +271,7 @@ fi
 # ======================= install gcc ======================= 
 if [ -z "$BUILD_TARGET_COMPOMENTS" ] || [ "0" == $(is_in_list gcc $BUILD_TARGET_COMPOMENTS) ]; then
     # ======================= gcc包 ======================= 
-    GCC_PKG=$(check_and_download "gcc" "gcc-*.tar.bz2" "ftp://gcc.gnu.org/pub/gcc/releases/gcc-4.8.3/gcc-4.8.3.tar.bz2" );
+    GCC_PKG=$(check_and_download "gcc" "gcc-*.tar.bz2" "ftp://gcc.gnu.org/pub/gcc/releases/gcc-4.8.4/gcc-4.8.4.tar.bz2" );
     if [ $? -ne 0 ]; then
         echo -e "$GCC_PKG";
         exit -1;
