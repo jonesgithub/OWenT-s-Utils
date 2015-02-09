@@ -13,6 +13,20 @@
 #include "LuaBindingWrapper.h"
 #include "../lua_module/LuaAdaptor.h"
 
+#define LUA_CHECK_TYPE_AND_RET(name, L, index, ret) \
+    if (!lua_is##name(L, index)) {\
+        WLOGERROR("parameter %d must be a %s, got %s", index, #name,luaL_typename(L, index)); \
+        fn::print_traceback(L, ""); \
+        return ret; \
+    }
+
+#define LUA_CHECK_TYPE_AND_NORET(name, L, index) \
+    if (!lua_is##name(L, index)) {\
+        WLOGERROR("parameter %d must be a %s, got %s", index, #name,luaL_typename(L, index)); \
+        fn::print_traceback(L, ""); \
+        return; \
+    }
+
 namespace script {
     namespace lua {
         namespace detail{
@@ -28,7 +42,8 @@ namespace script {
                     if (lua_gettop(L) < index)
                         return static_cast<Tt>(0);
 
-                    return static_cast<Tt>(luaL_checkinteger(L, index));
+                    LUA_CHECK_TYPE_AND_RET(number, L, index, static_cast<Tt>(0));
+                    return static_cast<Tt>(lua_tointeger(L, index));
                 }
             };
 
@@ -52,7 +67,9 @@ namespace script {
                     if (lua_gettop(L) < index)
                         return static_cast<Tt>(0);
 
-                    return static_cast<Tt>(luaL_checkinteger(L, index));
+                    LUA_CHECK_TYPE_AND_RET(number, L, index, static_cast<Tt>(0));
+
+                    return static_cast<Tt>(lua_tointeger(L, index));
                 }
             };
 
@@ -64,7 +81,9 @@ namespace script {
                     if (lua_gettop(L) < index)
                         return static_cast<Tt>(0);
 
-                    return static_cast<Tt>(luaL_checknumber(L, index));
+                    LUA_CHECK_TYPE_AND_RET(number, L, index, static_cast<Tt>(0));
+
+                    return static_cast<Tt>(lua_tonumber(L, index));
                 }
             };
 
@@ -94,7 +113,7 @@ namespace script {
 
                 static Tt unwraper(lua_State* L, int index) {
                     typedef typename std::remove_reference<
-                        typename std::remove_const<
+                        typename std::remove_cv<
                             typename std::remove_pointer<Tt>::type
                         >::type
                     >::type obj_t;
@@ -160,7 +179,9 @@ namespace script {
                     if (lua_gettop(L) < index)
                         return static_cast<const char*>(nullptr);
 
-                    return luaL_checkstring(L, index);
+                    LUA_CHECK_TYPE_AND_RET(string, L, index, nullptr);
+
+                    return lua_tostring(L, index);
                 }
             };
 
@@ -170,7 +191,9 @@ namespace script {
                     if (lua_gettop(L) < index)
                         return static_cast<char*>(nullptr);
 
-                    return const_cast<char*>(luaL_checkstring(L, index));
+                    LUA_CHECK_TYPE_AND_RET(string, L, index, nullptr);
+
+                    return const_cast<char*>(lua_tostring(L, index));
                 }
             };
 
@@ -179,7 +202,9 @@ namespace script {
                 static ::script::lua::string_buffer unwraper(lua_State* L, int index) {
                     ::script::lua::string_buffer ret(nullptr, 0);
 
-                    ret.data = luaL_checklstring(L, index, &ret.length);
+                    LUA_CHECK_TYPE_AND_RET(string, L, index, ret);
+
+                    ret.data = lua_tolstring(L, index, &ret.length);
                     return ret;
                 }
             };
@@ -189,7 +214,8 @@ namespace script {
             struct unwraper_var<std::shared_ptr<TC>, Ty...> {
                 static std::shared_ptr<TC> unwraper(lua_State* L, int index) {
                     typedef typename LuaBindingUserdataInfo<TC>::userdata_type ud_t;
-
+ 
+                    LUA_CHECK_TYPE_AND_RET(userdata, L, index, std::shared_ptr<TC>());
                     const char* class_name = LuaBindingUserdataInfo<TC>::getLuaMetaTableName();
                     ud_t* watcher = static_cast<ud_t*>(luaL_checkudata(L, index, class_name));
 
@@ -197,7 +223,7 @@ namespace script {
                         return std::shared_ptr<TC>();
                     }
 
-                    return watcher.lock();
+                    return watcher->lock();
                 }
             };
 
@@ -206,6 +232,8 @@ namespace script {
             struct unwraper_var<std::weak_ptr<TC>, Ty...> {
                 static std::weak_ptr<TC> unwraper(lua_State* L, int index) {
                     typedef typename LuaBindingUserdataInfo<TC>::userdata_type ud_t;
+
+                    LUA_CHECK_TYPE_AND_RET(userdata, L, index, std::weak_ptr<TC>());
 
                     const char* class_name = LuaBindingUserdataInfo<TC>::getLuaMetaTableName();
                     ud_t* watcher = static_cast<ud_t*>(luaL_checkudata(L, index, class_name));
@@ -223,6 +251,8 @@ namespace script {
             struct unwraper_var<cocos2d::Vec2, Ty...> {
                 static cocos2d::Vec2 unwraper(lua_State* L, int index) {
                     cocos2d::Vec2 ret;
+                    LUA_CHECK_TYPE_AND_RET(table, L, index, ret);
+
                     if (lua_gettop(L) < index)
                         return static_cast<cocos2d::Vec2>(ret);
 
@@ -242,6 +272,8 @@ namespace script {
             struct unwraper_var<cocos2d::Vec3, Ty...> {
                 static cocos2d::Vec3 unwraper(lua_State* L, int index) {
                     cocos2d::Vec3 ret;
+                    LUA_CHECK_TYPE_AND_RET(table, L, index, ret);
+
                     lua_getfield(L, index, "x");
                     ret.x = static_cast<float>(luaL_checknumber(L, -1));
                     lua_pop(L, 1);
@@ -262,6 +294,8 @@ namespace script {
             struct unwraper_var<cocos2d::Vec4, Ty...> {
                 static cocos2d::Vec4 unwraper(lua_State* L, int index) {
                     cocos2d::Vec4 ret;
+                    LUA_CHECK_TYPE_AND_RET(table, L, index, ret);
+
                     lua_getfield(L, index, "x");
                     ret.x = static_cast<float>(luaL_checknumber(L, -1));
                     lua_pop(L, 1);
@@ -286,6 +320,8 @@ namespace script {
             struct unwraper_var<cocos2d::Size, Ty...> {
                 static cocos2d::Size unwraper(lua_State* L, int index) {
                     cocos2d::Size ret;
+                    LUA_CHECK_TYPE_AND_RET(table, L, index, ret);
+
                     lua_getfield(L, index, "width");
                     ret.width = static_cast<float>(luaL_checknumber(L, -1));
                     lua_pop(L, 1);
@@ -302,6 +338,8 @@ namespace script {
             struct unwraper_var<cocos2d::Rect, Ty...> {
                 static cocos2d::Rect unwraper(lua_State* L, int index) {
                     cocos2d::Rect ret;
+                    LUA_CHECK_TYPE_AND_RET(table, L, index, ret);
+
                     lua_getfield(L, index, "x");
                     ret.origin.x = static_cast<float>(luaL_checknumber(L, -1));
                     lua_pop(L, 1);
@@ -328,6 +366,7 @@ namespace script {
             struct unwraper_var<std::pair<TLeft, TRight>, Ty...> {
                 static std::pair<TLeft, TRight> unwraper(lua_State* L, int index) {
                     std::pair<TLeft, TRight> ret;
+                    LUA_CHECK_TYPE_AND_RET(table, L, index, ret);
 
                     lua_pushvalue(L, index);
 
@@ -349,6 +388,8 @@ namespace script {
             struct unwraper_var<std::vector<Ty>, Tl...> {
                 static std::vector<Ty> unwraper(lua_State* L, int index) {
                     std::vector<Ty> ret;
+                    LUA_CHECK_TYPE_AND_RET(table, L, index, ret);
+
                     LUA_GET_TABLE_LEN(size_t len, L, index);
                     ret.reserve(len);
 
@@ -369,6 +410,8 @@ namespace script {
             struct unwraper_var<std::list<Ty>, Tl...> {
                 static std::list<Ty> unwraper(lua_State* L, int index) {
                     std::list<Ty> ret;
+                    LUA_CHECK_TYPE_AND_RET(table, L, index, ret);
+
                     LUA_GET_TABLE_LEN(size_t len, L, index);
 
                     lua_pushvalue(L, index);
@@ -388,6 +431,8 @@ namespace script {
             struct unwraper_var<std::array<Ty, SIZE>, Tl...> {
                 static std::array<Ty, SIZE> unwraper(lua_State* L, int index) {
                     std::array<Ty, SIZE> ret;
+                    LUA_CHECK_TYPE_AND_RET(table, L, index, ret);
+
                     LUA_GET_TABLE_LEN(size_t len, L, index);
 
                     lua_pushvalue(L, index);
@@ -407,8 +452,10 @@ namespace script {
             struct unwraper_var<std::string, Ty...> {
                 static std::string unwraper(lua_State* L, int index) {
                     std::string ret;
+                    LUA_CHECK_TYPE_AND_RET(string, L, index, ret);
+
                     size_t len = 0;
-                    const char* start = luaL_checklstring(L, index, &len);
+                    const char* start = lua_tolstring(L, index, &len);
                     ret.assign(start, len);
                     return ret;
                 }
@@ -416,14 +463,59 @@ namespace script {
 
             // --------------- stl 扩展 ----------------
 
+            // ================ 数组支持 ================
+            template<typename Ty, size_t SIZE>
+            struct unwraper_var_array_support {
+                typedef Ty type[SIZE];
+            };
+
+            template<typename Ty, size_t SIZE, typename... Tl>
+            struct unwraper_var<Ty[SIZE], Tl...> {
+                static typename unwraper_var_array_support<Ty, SIZE>::type unwraper(lua_State* L, int index) {
+                    typename unwraper_var_array_support<Ty, SIZE>::type ret;
+                    LUA_CHECK_TYPE_AND_RET(table, L, index, ret);
+
+                    LUA_GET_TABLE_LEN(size_t len, L, index);
+
+                    lua_pushvalue(L, index);
+                    for (size_t i = 1; i <= len && i <= SIZE; ++i) {
+                        lua_pushinteger(L, static_cast<lua_Unsigned>(i));
+                        lua_gettable(L, -2);
+                        ret[i] = unwraper_var<Ty>::unwraper(L, -1);
+                        lua_pop(L, 1);
+                    }
+                    lua_pop(L, 1);
+
+                    return std::move(ret);
+                }
+            };
+
+            template<size_t SIZE, typename... Tl>
+            struct unwraper_var<char[SIZE], Tl...> {
+                static typename unwraper_var_array_support<char, SIZE>::type unwraper(lua_State* L, int index) {
+                    typename unwraper_var_array_support<char, SIZE>::type ret = {0};
+                    LUA_CHECK_TYPE_AND_RET(string, L, index, ret);
+
+                    size_t len = 0;
+
+                    const char* start = lua_tolstring(L, index, &len);
+                    using std::copy;
+                    using std::min;
+                    copy(start, start + min(SIZE, len), ret);
+
+                    return std::move(ret);
+                }
+            };
+            // -------------- 数组支持 --------------
+
             template<typename Ty, typename... Tl>
             struct unwraper_var : public std::conditional<
                 std::is_enum<Ty>::value,
-                unwraper_var_lua_type<Ty, lua_Unsigned>,
+                unwraper_var_lua_type<Ty, lua_Unsigned>,    // 枚举类型
                 typename std::conditional<
                     std::is_pointer<Ty>::value,
-                    unwraper_ptr_var_lua_type<Ty, Ty>,
-                    unwraper_var_lua_type<Ty, Ty>
+                    unwraper_ptr_var_lua_type<Ty, Ty>,      // 指针类型
+                    unwraper_var_lua_type<Ty, Ty>           // POD类型
                 >::type
             >::type {};
 
@@ -452,7 +544,7 @@ namespace script {
                 template<typename Tfn, class TupleT, int... N >
                 static int run_fn(lua_State* L, Tfn fn, index_seq_list<N...>) {
                     return wraper_var<
-                        typename std::remove_const<
+                        typename std::remove_cv<
                             typename std::remove_reference<Tr>::type
                         >::type
                     >::wraper(
@@ -485,10 +577,36 @@ namespace script {
                     }
 
                     return base_type::template run_fn<value_type, std::tuple<
-                        typename std::remove_const<typename std::remove_reference<TParam>::type>::type...
+                        typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...
                     > >(L,
                         fn,
                         typename build_args_index<TParam...>::index_seq_type()
+                    );
+                }
+            };
+
+            /*************************************\
+            |* 仿函数Lua绑定，动态参数个数          *|
+            \*************************************/
+            template<typename Tr, typename... TParam>
+            struct unwraper_functor_fn : public unwraper_static_fn_base<Tr> {
+                typedef unwraper_static_fn_base<Tr> base_type;
+                typedef std::function<Tr(TParam...)> value_type;
+
+
+                // 动态参数个数
+                static int LuaCFunction(lua_State* L) {
+                    value_type* fn = reinterpret_cast<value_type*>(lua_touserdata(L, lua_upvalueindex(1)));
+                    if (nullptr == fn) {
+                        // 找不到函数
+                        return 0;
+                    }
+
+                    return base_type::template run_fn<value_type, std::tuple<
+                        typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...
+                    > >(L,
+                    *fn,
+                    typename build_args_index<TParam...>::index_seq_type()
                     );
                 }
             };
@@ -508,7 +626,7 @@ namespace script {
                     };
 
                     return base_type::template run_fn<decltype(fn_wraper), std::tuple<
-                        typename std::remove_const<typename std::remove_reference<TParam>::type>::type...
+                        typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...
                     > >(
                         L,
                         fn_wraper,
@@ -523,7 +641,7 @@ namespace script {
                     };
 
                     return base_type::template run_fn<decltype(fn_wraper), std::tuple<
-                        typename std::remove_const<typename std::remove_reference<TParam>::type>::type...
+                        typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...
                     > >(
                         L,
                         fn_wraper,

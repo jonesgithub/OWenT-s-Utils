@@ -134,7 +134,7 @@ namespace script {
                 template<typename TParam>
                 static int wraper(lua_State* L, TParam&& v) {
                     typedef typename std::remove_reference<
-                        typename std::remove_const<
+                        typename std::remove_cv<
                             typename std::remove_pointer<Ty>::type
                         >::type
                     >::type obj_t;
@@ -213,6 +213,12 @@ namespace script {
                 static int wraper(lua_State* L, const std::shared_ptr<TC>& v) {
                     typedef typename LuaBindingUserdataInfo<TC>::userdata_type ud_t;
 
+                    // 无效则push nil
+                    if (!v) {
+                        lua_pushnil(L);
+                        return 1;
+                    }
+
                     void* buff = lua_newuserdata(L, sizeof(ud_t));
                     new (buff)ud_t(v);
 
@@ -229,6 +235,12 @@ namespace script {
             struct wraper_var<std::weak_ptr<TC>, Ty...> {
                 static int wraper(lua_State* L, const std::weak_ptr<TC>& v) {
                     typedef typename LuaBindingUserdataInfo<TC>::userdata_type ud_t;
+
+                    // 无效则push nil
+                    if (v.expired()) {
+                        lua_pushnil(L);
+                        return 1;
+                    }
 
                     void* buff = lua_newuserdata(L, sizeof(ud_t));
                     new (buff)ud_t(v);
@@ -412,15 +424,44 @@ namespace script {
             };
 
             // --------------- stl 扩展 ----------------
+
+            // ================ 数组支持 ================
+            template<typename Ty, size_t SIZE, typename... Tl>
+            struct wraper_var<Ty[SIZE], Tl...> {
+                static int wraper(lua_State* L, const Ty v[SIZE]) {
+                    lua_Unsigned res = 1;
+                    lua_newtable(L);
+                    int tb = lua_gettop(L);
+                    for (const Ty& ele : v) {
+                        // 目前只支持一个值
+                        lua_pushunsigned(L, res);
+                        wraper_var<Ty>::wraper(L, ele);
+                        lua_settable(L, -3);
+
+                        ++res;
+                    }
+                    lua_settop(L, tb);
+                    return 1;
+                }
+            };
+
+            template<size_t SIZE, typename... Tl>
+            struct wraper_var<char[SIZE], Tl...> {
+                static int wraper(lua_State* L, const char v[SIZE]) {
+                    lua_pushstring(L, v);
+                    return 1;
+                }
+            };
+            // -------------- 数组支持 --------------
             
             template<typename Ty, typename... Tl>
             struct wraper_var : public std::conditional<
                 std::is_enum<Ty>::value,
-                wraper_var_lua_type<lua_Unsigned>,
+                wraper_var_lua_type<lua_Unsigned>,      // 枚举类型
                 typename std::conditional<
                     std::is_pointer<Ty>::value,
-                    wraper_ptr_var_lua_type<Ty>,
-                    wraper_var_lua_type<Ty>
+                    wraper_ptr_var_lua_type<Ty>,        // 指针类型
+                    wraper_var_lua_type<Ty>             // POD类型
                 >::type 
             >::type {};
 
@@ -429,13 +470,13 @@ namespace script {
                 template<typename TupleT, int N>
                 struct runner {
                     int operator()(lua_State* L, TupleT& t) {
-                        return detail::wraper_var<
-                            typename std::remove_const<
-                                typename std::remove_reference<
-                                    typename std::tuple_element<N, TupleT>::type
-                                >::type
-                            >::type
-                        >::wraper(L, std::get<N>(t));
+                        typedef typename std::remove_cv <
+                            typename std::remove_reference <
+                            typename std::tuple_element<N, TupleT>::type
+                            > ::type
+                        > ::type var_t;
+                        
+                        return detail::wraper_var<var_t>::wraper(L, std::get<N>(t));
                     }
                 };
 
@@ -451,6 +492,11 @@ namespace script {
                     }
 
                     return ret;
+                }
+
+                template<class TupleT>
+                static int wraper_bat_count(lua_State* L, TupleT&& t, index_seq_list<>) {
+                    return 0;
                 }
             };
         }

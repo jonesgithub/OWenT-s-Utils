@@ -2,6 +2,7 @@
 
 #include <string>
 #include <list>
+#include <functional>
 #include <std/explicit_declare.h>
 
 #include "LuaBindingUnwrapper.h"
@@ -87,7 +88,7 @@ namespace script {
             self_type& addConst(const char* const_name, const char* n, size_t s);
 
             /**
-             * 给命名空间添加方法，自动推断类型（暂时没空实现，先用简单暴力的方法）
+             * 给命名空间添加方法，自动推断类型
              *
              * @tparam  TF  Type of the tf.
              * @param   func_name   Name of the function.
@@ -99,6 +100,30 @@ namespace script {
                 lua_pushstring(state, func_name);
                 lua_pushlightuserdata(state, reinterpret_cast<void*>(fn));
                 lua_pushcclosure(state, detail::unwraper_static_fn<R, TParam...>::LuaCFunction, 1);
+                lua_settable(state, getNamespaceTable());
+
+                return (*this);
+            }
+
+            /**
+             * 给命名空间添加仿函数，自动推断类型
+             *
+             * @tparam  R           Type of the r.
+             * @tparam  TParam      Type of the parameter.
+             * @param   func_name   Name of the function.
+             * @param   fn          functor
+             *
+             * @return  A self_type&amp;
+             */
+            template<typename R, typename... TParam>
+            self_type& addMethod(const char* func_name, std::function<R(TParam...)> fn) {
+                typedef std::function<R(TParam...)> fn_t;
+
+                lua_State* state = getLuaState();
+                lua_pushstring(state, func_name);
+
+                LuaBindingPlacementNewAndDelete<fn_t>::create(state, fn);
+                lua_pushcclosure(state, detail::unwraper_functor_fn<R, TParam...>::LuaCFunction, 1);
                 lua_settable(state, getNamespaceTable());
 
                 return (*this);

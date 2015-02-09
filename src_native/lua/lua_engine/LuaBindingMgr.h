@@ -20,7 +20,7 @@
 
 namespace script {
     namespace lua {
-        class LuaBindingClassMgrBase : public std::enable_shared_from_this<LuaBindingClassMgrBase> {
+        class LuaBindingClassMgrBase {
         protected:
             LuaBindingClassMgrBase();
 
@@ -35,6 +35,7 @@ namespace script {
 
         template<typename TC>
         class LuaBindingClassMgrInst : public LuaBindingClassMgrBase, public Singleton< LuaBindingClassMgrInst<TC> > {
+        public:
             virtual int proc(lua_State* L) CLASS_OVERRIDE{
                 if (nullptr == L) {
                     cache_maps_.clear();
@@ -104,7 +105,7 @@ namespace script {
         private:
             bool inited_;
             std::list<func_type> auto_bind_list_;
-            std::list<std::shared_ptr<LuaBindingClassMgrBase> > lua_states_;
+            std::list<LuaBindingClassMgrBase*> lua_states_;
             friend class LuaBindingClassMgrBase;
         };
 

@@ -74,8 +74,8 @@ namespace script {
              */
 
             template<typename... TParams>
-            static value_type* create(lua_State *L, TParams... params) {
-                value_type* obj = new (lua_newuserdata(L, sizeof(value_type))) value_type(std::forward(params)...);
+            static value_type* create(lua_State *L, TParams&&... params) {
+                value_type* obj = new (lua_newuserdata(L, sizeof(value_type))) value_type(std::forward<TParams>(params)...);
 
                 pushMetatable(L);
                 lua_setmetatable(L, -2);
@@ -137,6 +137,8 @@ namespace script {
             bool exec_code(lua_State* L, const char* codes);
 
             int lua_stackdump(lua_State* L);
+
+            std::string lua_stackdump_to_string(lua_State* L);
         }
     }
 }

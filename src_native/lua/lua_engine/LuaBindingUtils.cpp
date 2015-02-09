@@ -186,13 +186,12 @@ namespace script
                     }
                 }
 
-                WLOGERROR("STACK :%s", ss.str().c_str());
+                WLOGINFO("STACK :%s", ss.str().c_str());
             }
 
             void print_traceback(lua_State* L, const std::string& msg) {
                 LuaAutoBlock autoBlock(L);
-                lua_stackdump(L);
-                WLOGINFO("TRACEBACK:\n%s", luaL_checkstring(L, -1));
+                WLOGINFO("TRACEBACK:%s\n%s", msg.c_str(), lua_stackdump_to_string(L).c_str());
             }
 
             bool exec_file(lua_State* L, const char* file_path) {
@@ -245,6 +244,33 @@ namespace script
 #endif
                 return lua_gettop(L) - top;
             }
+
+            std::string lua_stackdump_to_string(lua_State* L) {
+                std::stringstream ss;
+
+                int index = 1;
+                lua_Debug ar;
+                while (lua_getstack(L, index, &ar)) {
+                    lua_getinfo(L, "Snl", &ar);
+
+                    ss << "    ";
+
+                    if (ar.short_src) {
+                        ss << static_cast<const char*>(ar.short_src);
+                    }
+
+                    if (ar.name) {
+                        ss << "(" << static_cast<const char*>(ar.name) << ")";
+                    }
+
+                    ss << ":" << ar.currentline<< std::endl;
+
+                    ++index;
+                }
+
+                return ss.str();
+            }
+
         }
     }
 }

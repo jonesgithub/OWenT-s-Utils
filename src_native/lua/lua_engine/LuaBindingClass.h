@@ -61,11 +61,6 @@ namespace script {
 
             ~LuaBindingClass() {
                 finish_class();
-
-                // 使用内建new函数时必须使用内建回收函数
-                assert(__new != default_funcs_[FT_NEW] || (
-                    __lua_gc == default_funcs_[FT_GC] || __lua_null_gc == default_funcs_[FT_GC]
-                ));
             }
 
             /**
@@ -156,6 +151,30 @@ namespace script {
             }
 
             /**
+             * 给类添加仿函数，自动推断类型
+             *
+             * @tparam  R           Type of the r.
+             * @tparam  TParam      Type of the parameter.
+             * @param   func_name   Name of the function.
+             * @param   fn          functor
+             *
+             * @return  A self_type&amp;
+             */
+            template<typename R, typename... TParam>
+            self_type& addMethod(const char* func_name, std::function<R(TParam...)> fn) {
+                typedef std::function<R(TParam...)> fn_t;
+
+                lua_State* state = getLuaState();
+                lua_pushstring(state, func_name);
+
+                LuaBindingPlacementNewAndDelete<fn_t>::create(state, fn);
+                lua_pushcclosure(state, detail::unwraper_functor_fn<R, TParam...>::LuaCFunction, 1);
+                lua_settable(state, getStaticClassTable());
+
+                return (*this);
+            }
+
+            /**
              * 添加成员方法
              *
              * @tparam  R       Type of the r.
@@ -240,16 +259,28 @@ namespace script {
 
             static const char* getLuaMetaTableName() { return LuaBindingUserdataInfo<value_type>::getLuaMetaTableName(); }
 
-            self_type& setNew(lua_CFunction f) {
+            self_type& setNew(lua_CFunction f, const std::string& method_name = "new") {
                 lua_State* state = getLuaState();
                 // new 方法
-                lua_pushliteral(state, "new");
+                lua_pushstring(state, method_name.c_str());
                 lua_pushcfunction(state, f);
                 lua_settable(state, class_table_);
 
                 default_funcs_[FT_NEW] = f;
 
                 return (*this);
+            }
+
+            template<typename... TParams>
+            self_type& setDefaultNew(const std::string& method_name = "new") {
+                typedef std::function<pointer_type(TParams&&...)> new_fn_t;
+                lua_State* L = getLuaState();
+
+                new_fn_t fn = [L](TParams&&... params) {
+                    return create<TParams&&...>(L, params...);
+                };
+
+                return addMethod<pointer_type, TParams&&...>(method_name.c_str(), fn);
             }
 
             self_type& setToString(lua_CFunction f) {
@@ -349,9 +380,6 @@ namespace script {
             }
 
             void finish_class() {
-                if (nullptr == default_funcs_[FT_NEW])
-                    setNew(__new);
-
                 if (nullptr == default_funcs_[FT_TOSTRING])
                     setToString(__tostring);
 
@@ -369,15 +397,9 @@ namespace script {
              *
              * @return  null if it fails, else a pointer_type.
              */
-
-            static pointer_type create(lua_State *L) {
-                pointer_type obj = pointer_type(new proxy_type());
-                void* buffer = lua_newuserdata(L, sizeof(userdata_type));
-                new (buffer)userdata_type(obj);
-
-                const char* class_name = getLuaMetaTableName();
-                luaL_getmetatable(L, class_name);
-                lua_setmetatable(L, -2);
+            template<typename... TParams>
+            static pointer_type create(lua_State *L, TParams&&... params) {
+                pointer_type obj = pointer_type(new proxy_type(std::forward<TParams>(params)...));
 
                 // 添加到缓存表，防止被立即析构
                 LuaBindingClassMgrInst<proxy_type>::Instance()->addRef(L, obj);
@@ -431,26 +453,6 @@ namespace script {
             }
 
             /**
-             * __new 方法.
-             *
-             * @author  
-             * @date    2014/10/25
-             *
-             * @param [in,out]  L   If non-null, the lua_State * to process.
-             *
-             * @return  An int.
-             */
-
-            static int __new(lua_State *L) {
-                // remove self
-                if (lua_gettop(L) > 0)
-                    lua_remove(L, 1);
-
-                create(L);
-                return 1;
-            }
-
-            /**
              * 垃圾回收方法
              *
              * @author  
@@ -497,6 +499,7 @@ namespace script {
                 member_proxy_method_t* fn = reinterpret_cast<member_proxy_method_t*>(lua_touserdata(L, lua_upvalueindex(1)));
                 if (nullptr == fn) {
                     WLOGERROR("lua try to call member method in class %s but fn not set.\n", getLuaMetaTableName());
+                    fn::print_traceback(L, "");
                     return 0;
                 }
 
@@ -505,6 +508,7 @@ namespace script {
 
                 if (nullptr == pobj) {
                     WLOGERROR("lua try to call %s's member method but self not set or type error.\n", class_name);
+                    fn::print_traceback(L, "");
                     return 0;
                 }
 
@@ -513,6 +517,7 @@ namespace script {
 
                 if (!obj_ptr) {
                     WLOGERROR("lua try to call %s's member method but this=nullptr.\n", class_name);
+                    fn::print_traceback(L, "");
                     return 0;
                 }
 

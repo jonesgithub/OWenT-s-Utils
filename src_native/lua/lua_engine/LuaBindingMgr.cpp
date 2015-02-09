@@ -7,7 +7,7 @@ namespace script
     namespace lua
     {
         LuaBindingClassMgrBase::LuaBindingClassMgrBase() {
-            LuaBindingMgr::Instance()->lua_states_.push_back(shared_from_this());
+            LuaBindingMgr::Instance()->lua_states_.push_back(this);
         }
 
         LuaBindingClassMgrBase::~LuaBindingClassMgrBase() {    
