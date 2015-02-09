@@ -1,22 +1,23 @@
 ﻿#include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <io.h>
+
 #include <iostream>
 
-#include "LogHandlerFilesystem.h"
+#include "Log/LogHandlerFilesystem.h"
 
 #ifdef _MSC_VER
+#include <io.h>
 #include <direct.h>
 #define FUNC_MKDIR(x) _mkdir(x)
 #define FUNC_ACCESS(x) _access(x, 0)
 
 #else
-
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #define FUNC_MKDIR(x) mkdir(x, S_IRWXU | S_IRWXG | S_IRGRP | S_IWGRP | S_IROTH)
-#define FUNC_ACCESS(x) _access(x, F_OK)
+#define FUNC_ACCESS(x) access(x, F_OK)
 
 #endif
 
@@ -84,6 +85,7 @@ void LogHandlerFilesystem::operator()(LogWrapper::level_t level_id, const char* 
     }
 
     fputs(content, f);
+    fputs("\r\n", f);
     if (!enable_buffer_) {
         fflush(f);
     }
