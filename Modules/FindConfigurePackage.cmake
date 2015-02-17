@@ -9,8 +9,10 @@
 #     BUILD_WITH_CONFIGURE
 #     BUILD_WITH_CMAKE
 #     CONFIGURE_FLAGS [configure options...]
+#     CMAKE_FLAGS [cmake options...]
 #     MAKE_FLAGS [make options...]
 #     WORKING_DIRECTORY <work directory>
+#     BUILD_DIRECTORY <build directory>
 #     PREFIX_DIRECTORY <prefix directory>
 #     SRC_DIRECTORY_NAME <source directory name>
 #     ZIP_URL <zip url>
@@ -21,9 +23,11 @@
 #
 # ::
 #
-#   <configure options>     - flags added to configure
-#   <make options>          - flags added to make
+#   <configure options>     - flags added to configure command
+#   <cmake options>         - flags added to cmake command
+#   <make options>          - flags added to make command
 #   <work directory>        - work directory
+#   <build directory>       - where to execute configure and make
 #   <prefix directory>      - prefix directory(default: <work directory>)
 #   <source directory name> - source directory name(default detected by download url)
 #   <zip url>               - from where to download zip when find package failed
@@ -49,8 +53,8 @@
 macro (FindConfigurePackage)
     include(CMakeParseArguments)
     set(optionArgs BUILD_WITH_CONFIGURE BUILD_WITH_CMAKE)
-    set(oneValueArgs PACKAGE WORKING_DIRECTORY PREFIX_DIRECTORY SRC_DIRECTORY_NAME ZIP_URL TAR_URL SVN_URL GIT_URL)
-    set(multiValueArgs CONFIGURE_CMD CONFIGURE_FLAGS MAKE_FLAGS)
+    set(oneValueArgs PACKAGE WORKING_DIRECTORY BUILD_DIRECTORY PREFIX_DIRECTORY SRC_DIRECTORY_NAME ZIP_URL TAR_URL SVN_URL GIT_URL)
+    set(multiValueArgs CONFIGURE_CMD CONFIGURE_FLAGS CMAKE_FLAGS MAKE_FLAGS)
     cmake_parse_arguments(FindConfigurePackage "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
 
     # step 1. find using standard method
@@ -86,13 +90,13 @@ macro (FindConfigurePackage)
                 endif()
 
                 find_program(ZIP_EXECUTABLE wzzip PATHS "$ENV{ProgramFiles}/WinZip")
-                if(ZIP_EXECUTABLE AND NOT EXISTS "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_FULL_NAME}")
+                if(ZIP_EXECUTABLE AND NOT EXISTS "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_NAME}")
                     execute_process(COMMAND ${ZIP_EXECUTABLE} -f "${FindConfigurePackage_WORKING_DIRECTORY}/${DOWNLOAD_FILENAME}"
                         WORKING_DIRECTORY "${FindConfigurePackage_WORKING_DIRECTORY}"
                     )
                 endif()
 
-                if(NOT ZIP_EXECUTABLE AND NOT EXISTS "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_FULL_NAME}")
+                if(NOT ZIP_EXECUTABLE AND NOT EXISTS "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_NAME}")
                   find_program(ZIP_EXECUTABLE 7z PATHS "$ENV{ProgramFiles}/7-Zip")
                   if(ZIP_EXECUTABLE)
                       execute_process(COMMAND ${ZIP_EXECUTABLE} -r -y "${FindConfigurePackage_WORKING_DIRECTORY}/${DOWNLOAD_FILENAME}"
@@ -101,7 +105,7 @@ macro (FindConfigurePackage)
                   endif()
                 endif()
 
-                if(NOT ZIP_EXECUTABLE AND NOT EXISTS "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_FULL_NAME}")
+                if(NOT ZIP_EXECUTABLE AND NOT EXISTS "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_NAME}")
                   find_package(Cygwin)
                   find_program(ZIP_EXECUTABLE unzip PATHS "${CYGWIN_INSTALL_PATH}/bin")
                   if(ZIP_EXECUTABLE)
@@ -112,7 +116,7 @@ macro (FindConfigurePackage)
                 endif()
 
                 if(NOT ZIP_EXECUTABLE)
-                  message(FATAL_ERROR "unzip exe not found")
+                    message(FATAL_ERROR "unzip tools not found")
                 endif()
 
             # tar package
@@ -128,14 +132,14 @@ macro (FindConfigurePackage)
                 endif()
 
                 find_program(TAR_EXECUTABLE tar PATHS "${CYGWIN_INSTALL_PATH}/bin")
-                if(TAR_EXECUTABLE AND NOT EXISTS "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_FULL_NAME}")
+                if(TAR_EXECUTABLE AND NOT EXISTS "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_NAME}")
                     execute_process(COMMAND ${TAR_EXECUTABLE} -axvf "${FindConfigurePackage_WORKING_DIRECTORY}/${DOWNLOAD_FILENAME}"
                         WORKING_DIRECTORY "${FindConfigurePackage_WORKING_DIRECTORY}"
                     )
                 endif()
 
                 if(NOT TAR_EXECUTABLE)
-                  message(FATAL_ERROR "tar exe not found")
+                    message(FATAL_ERROR "tar not found")
                 endif()
 
             # git package
@@ -161,43 +165,59 @@ macro (FindConfigurePackage)
             elseif(FindConfigurePackage_SVN_URL)
                 get_filename_component(DOWNLOAD_FILENAME "${FindConfigurePackage_SVN_URL}" NAME)
 
-                if(NOT EXISTS "${FindConfigurePackage_WORKING_DIRECTORY}/${DOWNLOAD_FILENAME}")
+                if(NOT FindConfigurePackage_SRC_DIRECTORY_NAME)
+                    get_filename_component(FindConfigurePackage_SRC_DIRECTORY_NAME "${DOWNLOAD_FILENAME}" NAME)
+                endif()
+
+                if(NOT EXISTS "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_NAME}")
                     find_package(Subversion)
                     if(NOT SUBVERSION_FOUND)
                        message(FATAL_ERROR "svn not found")
                     endif()
 
-                    execute_process(COMMAND ${Subversion_SVN_EXECUTABLE} co "${FindConfigurePackage_SVN_URL}" "${DOWNLOAD_FILENAME}"
+                    execute_process(COMMAND ${Subversion_SVN_EXECUTABLE} co "${FindConfigurePackage_SVN_URL}" "${FindConfigurePackage_SRC_DIRECTORY_NAME}"
                         WORKING_DIRECTORY "${FindConfigurePackage_WORKING_DIRECTORY}"
                     )
-                endif()
-
-                if(NOT FindConfigurePackage_SRC_DIRECTORY_NAME)
-                    get_filename_component(FindConfigurePackage_SRC_DIRECTORY_NAME "${DOWNLOAD_FILENAME}" NAME)
                 endif()
             endif()
 
             # build using configure and make
+            if (NOT FindConfigurePackage_BUILD_DIRECTORY)
+                set(FindConfigurePackage_BUILD_DIRECTORY "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_NAME}")
+            endif()
+
             if(FindConfigurePackage_BUILD_WITH_CONFIGURE)
+                file(RELATIVE_PATH CONFIGURE_EXEC_FILE ${FindConfigurePackage_BUILD_DIRECTORY} "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_NAME}/configure")
+                if ( ${CONFIGURE_EXEC_FILE} STREQUAL "configure")
+                    set(CONFIGURE_EXEC_FILE "./configure")
+                endif()
                 execute_process(
-                    COMMAND "./configure" "--prefix=${FindConfigurePackage_PREFIX_DIRECTORY}" ${FindConfigurePackage_CONFIGURE_FLAGS}
-                    WORKING_DIRECTORY "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_NAME}"
-                    ERROR_VARIABLE OUTPUT_ERROR_TEXT
+                    COMMAND ${CONFIGURE_EXEC_FILE} "--prefix=${FindConfigurePackage_PREFIX_DIRECTORY}" ${FindConfigurePackage_CONFIGURE_FLAGS}
+                    WORKING_DIRECTORY "${FindConfigurePackage_BUILD_DIRECTORY}"
                 )
 
                 execute_process(
                     COMMAND "make" ${FindConfigurePackage_MAKE_FLAGS} "install"
-                    WORKING_DIRECTORY "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_NAME}"
-                    ERROR_VARIABLE OUTPUT_ERROR_TEXT
+                    WORKING_DIRECTORY "${FindConfigurePackage_BUILD_DIRECTORY}"
                 )
 
             elseif(FindConfigurePackage_BUILD_WITH_CMAKE)
-                add_subdirectory("${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_NAME}")
-                set(${FindConfigurePackage_PACKAGE}_FOUND TRUE)
-                set(${FindConfigurePackage_PACKAGE}_ROOT "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_NAME}")
-                set(${FindConfigurePackage_PACKAGE}_LIBRARIES ${FindConfigurePackage_PACKAGE})
-                set(${FindConfigurePackage_PACKAGE}_INCLUDE_DIRS "${${FindConfigurePackage_PACKAGE}_ROOT}/include")
+                file(RELATIVE_PATH BUILD_WITH_CMAKE_PROJECT_DIR ${FindConfigurePackage_BUILD_DIRECTORY} "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_NAME}")
+                if ( NOT BUILD_WITH_CMAKE_PROJECT_DIR)
+                    set(BUILD_WITH_CMAKE_PROJECT_DIR ".")
+                endif()
+                execute_process(
+                    COMMAND "cmake" ${BUILD_WITH_CMAKE_PROJECT_DIR} "-DCMAKE_INSTALL_PREFIX=${FindConfigurePackage_PREFIX_DIRECTORY}" ${FindConfigurePackage_CMAKE_FLAGS}
+                    WORKING_DIRECTORY "${FindConfigurePackage_BUILD_DIRECTORY}"
+                )
+
+                execute_process(
+                    COMMAND "make" ${FindConfigurePackage_MAKE_FLAGS} "install"
+                    WORKING_DIRECTORY "${FindConfigurePackage_BUILD_DIRECTORY}"
+                )
             endif()
+
+            find_package(${FindConfigurePackage_PACKAGE})
         endif()
     endif()
 endmacro(FindConfigurePackage)
