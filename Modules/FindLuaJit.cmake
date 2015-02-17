@@ -42,25 +42,22 @@
 # (To distribute this file outside of CMake, substitute the full
 #  License text for the above reference.)
 
-set(_LUAJIT_SEARCHES)
+unset(_LUAJIT_SEARCH_ROOT)
 
 if(LuaJit_ROOT)
-    set(LUAJIT_ROOT ${LuaJit_ROOT})
+  set(LUAJIT_ROOT ${LuaJit_ROOT})
 endif()
 
 # Search LIBUV_ROOT first if it is set.
 if(LUAJIT_ROOT)
   set(_LUAJIT_SEARCH_ROOT PATHS ${LUAJIT_ROOT} NO_DEFAULT_PATH)
-  list(APPEND _LUAJIT_SEARCHES _LUAJIT_SEARCH_ROOT)
 endif()
 
 set(LuaJit_NAMES luajit libluajit)
 
 # Try each search configuration.
-foreach(search ${_LUAJIT_SEARCHES})
-  find_path(LuaJit_INCLUDE_DIR NAMES luajit.h        ${${search}} PATH_SUFFIXES include)
-  find_library(LuaJit_LIBRARY  NAMES ${LuaJit_NAMES} ${${search}} PATH_SUFFIXES lib)
-endforeach()
+find_path(LuaJit_INCLUDE_DIR NAMES luajit.h        ${_LUAJIT_SEARCH_ROOT})
+find_library(LuaJit_LIBRARY  NAMES ${LuaJit_NAMES} ${_LUAJIT_SEARCH_ROOT})
 
 mark_as_advanced(LuaJit_LIBRARY LuaJit_INCLUDE_DIR)
 

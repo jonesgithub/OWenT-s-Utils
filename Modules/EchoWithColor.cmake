@@ -1,14 +1,18 @@
 #cmake color echo function
 #the final output color associated with terminal settings
 #usage: EchoWithColor( [
-#  [COLOR RED|GREEN|YELLOW|BLUE|PURPLE|CYAN] 
+#	[COLOR RED|GREEN|YELLOW|BLUE|PURPLE|CYAN] 
 #	[message1 [message2 ...]]] ...  
 #)
+
+if (WIN32)
+	message(WARNING "EchoWithColor will ignore COLOR in Win32 and Msys.")
+endif()
 
 function(EchoWithColor)
 	# ${ARGV}, ${ARGN}
 	
-	set(ECHO_WITH_COLOR_CMD "echo")
+    set(ECHO_WITH_COLOR_CMD "echo")
 	set(ECHO_WITH_COLOR_CMD_DP "")
     if(UNIX OR CYGWIN OR APPLE)
         set(TAG_RED     "\\033[31;1m")
@@ -29,8 +33,6 @@ function(EchoWithColor)
         set(TAG_PURPLE  "")
         set(TAG_CYAN    "")
         set(TAG_RESET   "")
-		
-		message(WARNING "EchoWithColor will ignore COLOR in Win32 and Msys.")
 	endif()
 	
 	set(ECHO_WITH_COLOR_PREFIX "")

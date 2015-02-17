@@ -5,7 +5,7 @@ macro(include_directory_recurse)
 	    file(GLOB_RECURSE SRC_HEADER_LIST_H "${basedir}/*.h" "${basedir}/*.hpp")
 		set(LAST_HEAD_FILE_DIR "  ")
 		foreach(src ${SRC_HEADER_LIST_H})
-			# 去掉文件名，截取路径 
+			#去掉文件名，截取路径
 			string(REGEX REPLACE "(.+)[/\\].+\\.h(pp)?$" "\\1" CUR_HEAD_FILE_DIR ${src})
 			
 			if ( NOT "${CUR_HEAD_FILE_DIR}" STREQUAL "${LAST_HEAD_FILE_DIR}" )
@@ -41,28 +41,30 @@ macro(include_macro_recurse)
 	endforeach()
 endmacro(include_macro_recurse)
 
-# cmake 递归包含工程列表模块 
-# include_project_recurse [FILTER filter] | [dir1 [dir2 [...]]] 
-macro(include_project_recurse)
-	set(INCLUDE_PROJECT_RECURSE_FILTER "*.project.cmake")
-	set(INCLUDE_PROJECT_RECURSE_FILTER_FLAG "false")
+
+# cmake 递归添加工程列表模块 
+# add_project_recurse [RECURSE] | [dir1 [dir2 [...]]] 
+macro(add_project_recurse)
+	set(INCLUDE_PROJECT_RECURSE_RECURSE_FLAG "false")
 	
 	foreach(basedir ${ARGV})
-        if ( "${basedir}" STREQUAL "FILTER" )
-			set(INCLUDE_PROJECT_RECURSE_FILTER_FLAG "true")
-		elseif( "${INCLUDE_PROJECT_RECURSE_FILTER_FLAG}" STREQUAL "true" )
-			set(INCLUDE_PROJECT_RECURSE_FILTER_FLAG "false")
-			set(INCLUDE_PROJECT_RECURSE_FILTER "${basedir}")
+        if( "${basedir}" STREQUAL "RECURSE" )
+		    set(INCLUDE_PROJECT_RECURSE_RECURSE_FLAG "true")
 		else()
-			file(GLOB_RECURSE ALL_PROJECT_FILES "${basedir}/${INCLUDE_PROJECT_RECURSE_FILTER}")
-			foreach(project_file ${ALL_PROJECT_FILES})
-				message(STATUS "Project File Found: ${project_file}")
-				include("${project_file}")
+		    if("${INCLUDE_PROJECT_RECURSE_RECURSE_FLAG}" STREQUAL "true")
+			    file(GLOB_RECURSE ALL_PROJECT_FILES "${basedir}/*")
+			else()
+			    file(GLOB ALL_PROJECT_FILES "${basedir}/*")
+			endif()
+			foreach(project_dir ${ALL_PROJECT_FILES})
+			    if(IS_DIRECTORY "${project_dir}" AND EXISTS "${project_dir}/CMakeLists.txt")
+				    message(STATUS "Project Directory Found: ${project_dir}")
+				    add_subdirectory("${project_dir}")
+				endif()
 			endforeach()
 		endif()
 	endforeach()
-endmacro(include_project_recurse)
-
+endmacro(add_project_recurse)
 
 # cmake VC 源文件分组  
 # source_group_by_dir [Source List Var1 [Source List Var2 [...]]]
@@ -83,5 +85,4 @@ macro(source_group_by_dir)
         endforeach()
     endif(MSVC)
 endmacro(source_group_by_dir)
-
 

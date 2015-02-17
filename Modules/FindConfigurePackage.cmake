@@ -8,9 +8,14 @@
 #     PACKAGE <name>
 #     BUILD_WITH_CONFIGURE
 #     BUILD_WITH_CMAKE
+#     BUILD_WITH_SCONS
+#     BUILD_WITH_CUSTOM_COMMAND
 #     CONFIGURE_FLAGS [configure options...]
 #     CMAKE_FLAGS [cmake options...]
+#     SCONS_FLAGS [scons options...]
+#     CUSTOM_BUILD_COMMAND [custom build cmd...]
 #     MAKE_FLAGS [make options...]
+#     PREBUILD_COMMAND [pre build cmd...]
 #     WORKING_DIRECTORY <work directory>
 #     BUILD_DIRECTORY <build directory>
 #     PREFIX_DIRECTORY <prefix directory>
@@ -25,7 +30,10 @@
 #
 #   <configure options>     - flags added to configure command
 #   <cmake options>         - flags added to cmake command
+#   <scons options>         - flags added to scons command
+#   <custom build cmd>      - custom commands for build
 #   <make options>          - flags added to make command
+#   <pre build cmd>         - commands to run before build tool
 #   <work directory>        - work directory
 #   <build directory>       - where to execute configure and make
 #   <prefix directory>      - prefix directory(default: <work directory>)
@@ -52,9 +60,9 @@
 
 macro (FindConfigurePackage)
     include(CMakeParseArguments)
-    set(optionArgs BUILD_WITH_CONFIGURE BUILD_WITH_CMAKE)
+    set(optionArgs BUILD_WITH_CONFIGURE BUILD_WITH_CMAKE BUILD_WITH_SCONS BUILD_WITH_CUSTOM_COMMAND)
     set(oneValueArgs PACKAGE WORKING_DIRECTORY BUILD_DIRECTORY PREFIX_DIRECTORY SRC_DIRECTORY_NAME ZIP_URL TAR_URL SVN_URL GIT_URL)
-    set(multiValueArgs CONFIGURE_CMD CONFIGURE_FLAGS CMAKE_FLAGS MAKE_FLAGS)
+    set(multiValueArgs CONFIGURE_CMD CONFIGURE_FLAGS CMAKE_FLAGS SCONS_FLAGS MAKE_FLAGS CUSTOM_BUILD_COMMAND PREBUILD_COMMAND)
     cmake_parse_arguments(FindConfigurePackage "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
 
     # step 1. find using standard method
@@ -65,11 +73,7 @@ macro (FindConfigurePackage)
             set(FindConfigurePackage_PREFIX_DIRECTORY ${FindConfigurePackage_WORK_DIRECTORY})
         endif()
 
-        # set package root
-        set(${FindConfigurePackage_PACKAGE}_ROOT "${FindConfigurePackage_PREFIX_DIRECTORY}")
-        # set package root upper case
-        string(TOUPPER "${FindConfigurePackage_PACKAGE}_ROOT" ${FindConfigurePackage_PACKAGE}_ROOT_UPPER)
-        set(${FindConfigurePackage_PACKAGE}_ROOT_UPPER "${FindConfigurePackage_PREFIX_DIRECTORY}")
+        list(APPEND CMAKE_FIND_ROOT_PATH ${FindConfigurePackage_PREFIX_DIRECTORY})
 
         # step 2. find in prefix
         find_package(${FindConfigurePackage_PACKAGE})
@@ -181,11 +185,23 @@ macro (FindConfigurePackage)
                 endif()
             endif()
 
-            # build using configure and make
+            # init build dir
             if (NOT FindConfigurePackage_BUILD_DIRECTORY)
                 set(FindConfigurePackage_BUILD_DIRECTORY "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_NAME}")
+                if (NOT EXISTS ${FindConfigurePackage_BUILD_DIRECTORY})
+                    file(MAKE_DIRECTORY ${FindConfigurePackage_BUILD_DIRECTORY})
+                endif()
             endif()
 
+            # prebuild commands
+            foreach(cmd ${FindConfigurePackage_PREBUILD_COMMAND})
+                execute_process(
+                    COMMAND ${cmd}
+                    WORKING_DIRECTORY "${FindConfigurePackage_BUILD_DIRECTORY}"
+                )
+            endforeach()
+
+            # build using configure and make
             if(FindConfigurePackage_BUILD_WITH_CONFIGURE)
                 file(RELATIVE_PATH CONFIGURE_EXEC_FILE ${FindConfigurePackage_BUILD_DIRECTORY} "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_NAME}/configure")
                 if ( ${CONFIGURE_EXEC_FILE} STREQUAL "configure")
@@ -201,6 +217,7 @@ macro (FindConfigurePackage)
                     WORKING_DIRECTORY "${FindConfigurePackage_BUILD_DIRECTORY}"
                 )
 
+            # build using cmake and make
             elseif(FindConfigurePackage_BUILD_WITH_CMAKE)
                 file(RELATIVE_PATH BUILD_WITH_CMAKE_PROJECT_DIR ${FindConfigurePackage_BUILD_DIRECTORY} "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_NAME}")
                 if ( NOT BUILD_WITH_CMAKE_PROJECT_DIR)
@@ -211,10 +228,38 @@ macro (FindConfigurePackage)
                     WORKING_DIRECTORY "${FindConfigurePackage_BUILD_DIRECTORY}"
                 )
 
+                # TODO visual studio?
                 execute_process(
                     COMMAND "make" ${FindConfigurePackage_MAKE_FLAGS} "install"
                     WORKING_DIRECTORY "${FindConfigurePackage_BUILD_DIRECTORY}"
                 )
+
+            # build using scons
+            elseif(FindConfigurePackage_BUILD_WITH_SCONS)
+                file(RELATIVE_PATH BUILD_WITH_SCONS_PROJECT_DIR ${FindConfigurePackage_BUILD_DIRECTORY} "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_NAME}")
+                if ( NOT BUILD_WITH_SCONS_PROJECT_DIR)
+                    set(BUILD_WITH_SCONS_PROJECT_DIR ".")
+                endif()
+
+                set(OLD_ENV_PREFIX $ENV{prefix})
+                set(ENV{prefix} ${FindConfigurePackage_PREFIX_DIRECTORY})
+                execute_process(
+                    COMMAND "scons" ${FindConfigurePackage_SCONS_FLAGS} ${BUILD_WITH_SCONS_PROJECT_DIR}
+                    WORKING_DIRECTORY "${FindConfigurePackage_BUILD_DIRECTORY}"
+                )
+                set(ENV{prefix} ${OLD_ENV_PREFIX})
+
+            # build using custom commands(such as gyp)
+            elseif(FindConfigurePackage_BUILD_WITH_CUSTOM_COMMAND)
+                foreach(cmd ${FindConfigurePackage_CUSTOM_BUILD_COMMAND})
+                    execute_process(
+                        COMMAND ${cmd}
+                        WORKING_DIRECTORY "${FindConfigurePackage_BUILD_DIRECTORY}"
+                    )
+                endforeach()
+
+            else()
+                message(FATAL_ERROR "build type is required")
             endif()
 
             find_package(${FindConfigurePackage_PACKAGE})

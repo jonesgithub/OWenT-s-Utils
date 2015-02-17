@@ -43,7 +43,7 @@
 # (To distribute this file outside of CMake, substitute the full
 #  License text for the above reference.)
 
-set(_GPERFTOOLS_SEARCHES)
+unset(_GPERFTOOLS_SEARCH_ROOT)
 
 # Search GPERFTOOLS_ROOT first if it is set.
 if(Gperftools_ROOT)
@@ -52,18 +52,15 @@ endif()
 
 if(GPERFTOOLS_ROOT)
   set(_GPERFTOOLS_SEARCH_ROOT PATHS ${GPERFTOOLS_ROOT} NO_DEFAULT_PATH)
-  list(APPEND _GPERFTOOLS_SEARCHES _GPERFTOOLS_SEARCH_ROOT)
 endif()
 
 set(GPERFTOOLS_NAMES tcmalloc_minimal tcmalloc tcmalloc_and_profiler)
 
 # Try each search configuration.
-foreach(search ${_GPERFTOOLS_SEARCHES})
-  find_path(Gperftools_INCLUDE_DIRS NAMES "google/tcmalloc.h" ${${search}} PATH_SUFFIXES include)
-  find_program(Gperftools_EXECUTABLE NAMES pprof ${${search}} PATH_SUFFIXES bin)
-  find_library(Gperftools_LIBRARY_DIRS NAMES ${GPERFTOOLS_NAMES} ${${search}} PATH_SUFFIXES lib)
-  string(REGEX REPLACE "[/\\\\][^/\\\\]*$" "" Gperftools_LIBRARY_DIRS "${Gperftools_LIBRARY_DIRS}")
-endforeach()
+find_path(Gperftools_INCLUDE_DIRS NAMES "google/tcmalloc.h" ${_GPERFTOOLS_SEARCH_ROOT})
+find_program(Gperftools_EXECUTABLE NAMES pprof ${_GPERFTOOLS_SEARCH_ROOT})
+find_library(Gperftools_LIBRARY_DIRS NAMES ${GPERFTOOLS_NAMES} ${_GPERFTOOLS_SEARCH_ROOT})
+string(REGEX REPLACE "[/\\\\][^/\\\\]*$" "" Gperftools_LIBRARY_DIRS "${Gperftools_LIBRARY_DIRS}")
 
 mark_as_advanced(Gperftools_LIBRARY_DIRS Gperftools_INCLUDE_DIRS Gperftools_EXECUTABLE )
 
