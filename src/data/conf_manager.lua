@@ -66,7 +66,7 @@ function conf_manager:set_path_rule(rule)
     self.__path_rule = rule
 end
 
-function conf_manager:load(path, kv_fn)
+function conf_manager:load(path, data_collector_fn, kv_fn)
     path = string.format(self.__path_rule, tostring(path))
     local tb = loader.load(path)
     if nil == tb then
@@ -87,18 +87,43 @@ function conf_manager:load(path, kv_fn)
             for ck, cv in ipairs(v) do
                 local rv = cv
                 local rk = { kv_fn(ck, rv) }
-                if cfg:get_by_table(rk) then
-                    log_warn('config [%s] already has key %s, old record will be covered', path, table.concat(rk, ', '))
-                end
-
-                table.insert(rk, rv)
-                cfg:set_by_table(rk)
+                data_collector_fn(cfg, rk, rv)
             end
         end
     end
 
     -- 释放资源
     loader.remove(path)
+
+    return true
+end
+
+function conf_manager:load_kv(path, kv_fn)
+    return self:load(path,
+        function(cfg, rk, rv)
+            if cfg:get_by_table(rk) then
+                log_warn('config [%s] already has key %s, old record will be covered', path, table.concat(rk, ', '))
+            end
+
+            table.insert(rk, rv)
+            cfg:set_by_table(rk)
+        end, kv_fn
+    )
+end
+
+function conf_manager:load_kl(path, kv_fn)
+    return self:load(path,
+        function(cfg, rk, rv)
+            local ls = cfg:get_by_table(rk)
+            if ls then
+                table.insert(ls, rv)
+            else
+                ls = { rv }
+                table.insert(rk, ls)
+                cfg:set_by_table(rk)
+            end
+        end, kv_fn
+    )
 end
 
 function conf_manager:set_readonly()
