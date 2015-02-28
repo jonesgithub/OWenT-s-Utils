@@ -65,9 +65,12 @@ macro (FindConfigurePackage)
     set(multiValueArgs CONFIGURE_CMD CONFIGURE_FLAGS CMAKE_FLAGS SCONS_FLAGS MAKE_FLAGS CUSTOM_BUILD_COMMAND PREBUILD_COMMAND)
     cmake_parse_arguments(FindConfigurePackage "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
 
+    # some module is not match standard, using upper case but package name
+    string(TOUPPER "${FindConfigurePackage_PACKAGE}_FOUND" FIND_CONFIGURE_PACKAGE_UPPER_NAME)
+
     # step 1. find using standard method
     find_package(${FindConfigurePackage_PACKAGE})
-    if(NOT ${FindConfigurePackage_PACKAGE}_FOUND)
+    if(NOT ${FindConfigurePackage_PACKAGE}_FOUND AND NOT ${FIND_CONFIGURE_PACKAGE_UPPER_NAME})
         if(NOT FindConfigurePackage_PREFIX_DIRECTORY)
             # prefix
             set(FindConfigurePackage_PREFIX_DIRECTORY ${FindConfigurePackage_WORK_DIRECTORY})
@@ -79,7 +82,7 @@ macro (FindConfigurePackage)
         find_package(${FindConfigurePackage_PACKAGE})
 
         # step 3. build
-        if(NOT ${FindConfigurePackage_PACKAGE}_FOUND)
+        if(NOT ${FindConfigurePackage_PACKAGE}_FOUND AND NOT ${FIND_CONFIGURE_PACKAGE_UPPER_NAME})
             # zip package
             if(FindConfigurePackage_ZIP_URL)
                 get_filename_component(DOWNLOAD_FILENAME "${FindConfigurePackage_ZIP_URL}" NAME)
@@ -103,7 +106,7 @@ macro (FindConfigurePackage)
                 if(NOT ZIP_EXECUTABLE AND NOT EXISTS "${FindConfigurePackage_WORKING_DIRECTORY}/${FindConfigurePackage_SRC_DIRECTORY_NAME}")
                   find_program(ZIP_EXECUTABLE 7z PATHS "$ENV{ProgramFiles}/7-Zip")
                   if(ZIP_EXECUTABLE)
-                      execute_process(COMMAND ${ZIP_EXECUTABLE} -r -y "${FindConfigurePackage_WORKING_DIRECTORY}/${DOWNLOAD_FILENAME}"
+                      execute_process(COMMAND ${ZIP_EXECUTABLE} s -r -y "${FindConfigurePackage_WORKING_DIRECTORY}/${DOWNLOAD_FILENAME}"
                           WORKING_DIRECTORY "${FindConfigurePackage_WORKING_DIRECTORY}"
                       )
                   endif()
@@ -127,7 +130,7 @@ macro (FindConfigurePackage)
             elseif(FindConfigurePackage_TAR_URL)
                 get_filename_component(DOWNLOAD_FILENAME "${FindConfigurePackage_TAR_URL}" NAME)
                 if(NOT FindConfigurePackage_SRC_DIRECTORY_NAME)
-                    string(REGEX REPLACE "\\.tar\\.[A-Za-z]$" "" FindConfigurePackage_SRC_DIRECTORY_NAME "${DOWNLOAD_FILENAME}")
+                    string(REGEX REPLACE "\\.tar\\.[A-Za-z0-9]+$" "" FindConfigurePackage_SRC_DIRECTORY_NAME "${DOWNLOAD_FILENAME}")
                 endif()
 
                 if(NOT EXISTS "${FindConfigurePackage_WORKING_DIRECTORY}/${DOWNLOAD_FILENAME}")
@@ -214,7 +217,7 @@ macro (FindConfigurePackage)
 
                 execute_process(
                     COMMAND "make" ${FindConfigurePackage_MAKE_FLAGS} "install"
-                    WORKING_DIRECTORY "${FindConfigurePackage_BUILD_DIRECTORY}"
+                    WORKING_DIRECTORY ${FindConfigurePackage_BUILD_DIRECTORY}
                 )
 
             # build using cmake and make
